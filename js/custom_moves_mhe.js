@@ -210,8 +210,5 @@ window.mheMoves = {
     "type": "Grass",
     "category": "Physical",
     "drain": [1,2]
-  },
-  "Aeroblast": {
-    "category": "Special"
   }
 };
