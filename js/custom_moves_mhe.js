@@ -1,5 +1,6 @@
 // Extra moves for Monster Hunter Emerald
 // These are merged into the data.moves map at runtime when type_mod=mh_em
+console.log('mhe moves')
 window.mheMoves = {
   "Acidic Clash": {
     "basePower": 80,
