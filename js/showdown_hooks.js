@@ -1301,32 +1301,51 @@ $(document).ready(function() {
         checkAndLoadScript(`./backups/${backupFiles[TITLE]}.js`, {
                 onLoad: (src) => {
                     npoint_data = backup_data
-                    loadDataSource(npoint_data)
-                    final_type_chart = construct_type_chart()
 
-                    if (mechanics == "hge") {
-                        initHGE()
-                    }
-
-                    setTimeout(function() {
-                        if (localStorage["left"]) {
-                            var set = localStorage["right"]
-                            $('.opposing').val(set)
-                            $('.opposing').change()
-                            $('.opposing .select2-chosen').text(set)
-                            if ($('.info-group.opp > * > .forme').is(':visible')) {
-                                $('.info-group.opp > * > .forme').change()
-                            }
-                        }
+                    const proceed = () => {
+                        loadDataSource(npoint_data)
+                        final_type_chart = construct_type_chart()
 
                         if (mechanics == "hge") {
-                            $('.hp-cntrl label, .z-btn').hide()
+                            initHGE()
                         }
 
-                        if (localStorage["right"]) {
-                            $(`[data-id='${localStorage["left"]}']`).click()
-                        }             
-                    }, 20)
+                        setTimeout(function() {
+                            if (localStorage["left"]) {
+                                var set = localStorage["right"]
+                                $('.opposing').val(set)
+                                $('.opposing').change()
+                                $('.opposing .select2-chosen').text(set)
+                                if ($('.info-group.opp > * > .forme').is(':visible')) {
+                                    $('.info-group.opp > * > .forme').change()
+                                }
+                            }
+
+                            if (mechanics == "hge") {
+                                $('.hp-cntrl label, .z-btn').hide()
+                            }
+
+                            if (localStorage["right"]) {
+                                $(`[data-id='${localStorage["left"]}']`).click()
+                            }             
+                        }, 20)
+                    }
+
+                    if (type_mod == 'mh_em') {
+                        checkAndLoadScript(`./js/custom_moves_mhe.js`, {
+                            onLoad: () => {
+                                if (window.mheMoves) {
+                                    // prefer adding as custom_moves to trigger custom move registration
+                                    npoint_data.custom_moves = Object.assign({}, npoint_data.custom_moves || {}, window.mheMoves)
+                                }
+                                proceed()
+                            },
+                            onNotFound: () => proceed(),
+                            onError: () => proceed()
+                        })
+                    } else {
+                        proceed()
+                    }
 
                 },
                 onNotFound: (src) => console.log(`Not found: ${src}`)
@@ -1337,29 +1356,47 @@ $(document).ready(function() {
    } else {
         $.get(npoint, function(data){
             npoint_data = data
-            loadDataSource(data)
 
-            if (mechanics == "hge") {
-                initHGE()
-            }
+            const proceed = () => {
+                loadDataSource(npoint_data)
 
-            final_type_chart = construct_type_chart()
-
-            setTimeout(function() {
-                if (localStorage["left"]) {
-                    var set = localStorage["right"]
-                    $('.opposing').val(set)
-                    $('.opposing').change()
-                    $('.opposing .select2-chosen').text(set)
-                    if ($('.info-group.opp > * > .forme').is(':visible')) {
-                        $('.info-group.opp > * > .forme').change()
-                    }
+                if (mechanics == "hge") {
+                    initHGE()
                 }
 
-                if (localStorage["right"]) {
-                    $(`[data-id='${localStorage["left"]}']`).click()
-                }             
-            }, 100)
+                final_type_chart = construct_type_chart()
+
+                setTimeout(function() {
+                    if (localStorage["left"]) {
+                        var set = localStorage["right"]
+                        $('.opposing').val(set)
+                        $('.opposing').change()
+                        $('.opposing .select2-chosen').text(set)
+                        if ($('.info-group.opp > * > .forme').is(':visible')) {
+                            $('.info-group.opp > * > .forme').change()
+                        }
+                    }
+
+                    if (localStorage["right"]) {
+                        $(`[data-id='${localStorage["left"]}']`).click()
+                    }             
+                }, 100)
+            }
+
+            if (type_mod == 'mh_em') {
+                checkAndLoadScript(`./js/custom_moves_mhe.js`, {
+                    onLoad: () => {
+                        if (window.mheMoves) {
+                            npoint_data.custom_moves = Object.assign({}, npoint_data.custom_moves || {}, window.mheMoves)
+                        }
+                        proceed()
+                    },
+                    onNotFound: () => proceed(),
+                    onError: () => proceed()
+                })
+            } else {
+                proceed()
+            }
            
         })
    }
