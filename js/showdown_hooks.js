@@ -861,6 +861,9 @@ function loadDataSource(data) {
         moves[move]["bp"] = jsonMove["basePower"]
 
 
+        if (!MOVES_BY_ID[g][move_id]) {
+            MOVES_BY_ID[g][move_id] = { basePower: 0, flags: {} }
+        }
         MOVES_BY_ID[g][move_id].basePower = jsonMove["basePower"]
 
 		var special_case_power_overrides = {
@@ -869,8 +872,9 @@ function loadDataSource(data) {
 		}
 
 		if (move in special_case_power_overrides) {
-			moves[move]["bp"] = special_case_power_overrides[move]
-	       MOVES_BY_ID[g][move_id].basePower = special_case_power_overrides[move]
+            moves[move]["bp"] = special_case_power_overrides[move]
+           if (!MOVES_BY_ID[g][move_id]) { MOVES_BY_ID[g][move_id] = { basePower: 0, flags: {} } }
+           MOVES_BY_ID[g][move_id].basePower = special_case_power_overrides[move]
 		}
         
         var optional_move_params = ["type", "category", "e_id", "multihit", "target", "recoil", "overrideBP", "secondaries", "drain", "priority", "willCrit"]  
@@ -878,6 +882,7 @@ function loadDataSource(data) {
             var param = optional_move_params[n]
             if (jsonMove[param]) {
               moves[move][param] = jsonMove[param]
+              if (!MOVES_BY_ID[g][move_id]) { MOVES_BY_ID[g][move_id] = { basePower: 0, flags: {} } }
               MOVES_BY_ID[g][move_id][param] = jsonMove[param]  
             }
         }
@@ -887,6 +892,8 @@ function loadDataSource(data) {
             var param = optional_flag_params[n]
             if (jsonMove[param]) {
               moves[move][param] = jsonMove[param]
+              if (!MOVES_BY_ID[g][move_id]) { MOVES_BY_ID[g][move_id] = { basePower: 0, flags: {} } }
+              if (!MOVES_BY_ID[g][move_id]["flags"]) { MOVES_BY_ID[g][move_id]["flags"] = {} }
               MOVES_BY_ID[g][move_id]["flags"][param] = jsonMove[param]  
             }
         }
@@ -895,16 +902,20 @@ function loadDataSource(data) {
         if (jsonMove['flags']) {
             if (jsonMove['flags']['punch']) {
                 moves[move]['isPunch'] = true
+                if (!MOVES_BY_ID[g][move_id]) { MOVES_BY_ID[g][move_id] = { basePower: 0, flags: {} } }
+                if (!MOVES_BY_ID[g][move_id]["flags"]) { MOVES_BY_ID[g][move_id]["flags"] = {} }
                 MOVES_BY_ID[g][move_id]["flags"]["punch"] = 1
             }
             if (jsonMove['flags']['sound']) {
                 moves[move]['isSound'] = true
+                if (!MOVES_BY_ID[g][move_id]) { MOVES_BY_ID[g][move_id] = { basePower: 0, flags: {} } }
+                if (!MOVES_BY_ID[g][move_id]["flags"]) { MOVES_BY_ID[g][move_id]["flags"] = {} }
                 MOVES_BY_ID[g][move_id]["flags"]["sound"] = 1
             }
         }
 
         if (!jsonMove['multihit'] && (damageGen == 5)) {
-             delete MOVES_BY_ID[g][move_id].multihit 
+             if (MOVES_BY_ID[g][move_id]) { delete MOVES_BY_ID[g][move_id].multihit } 
         }
     }
 
@@ -920,7 +931,11 @@ function loadDataSource(data) {
 
             moves[move] = jsonMoves[move]
             moves[move]["bp"] = jsonMoves[move]["basePower"]
-            MOVES_BY_ID[8][move.replace(/-|,|'|’| /g, "").toLowerCase()] = jsonMoves[move]
+            const newMoveId = move.replace(/-|,|'|’| /g, "").toLowerCase()
+            // Register for current gen to avoid undefined lookups
+            MOVES_BY_ID[g][newMoveId] = Object.assign({ basePower: jsonMoves[move]["basePower"], flags: {} }, jsonMoves[move])
+            // Keep existing behavior of also adding to gen 8 index
+            MOVES_BY_ID[8][newMoveId] = jsonMoves[move]
         }
     }
 
@@ -1083,8 +1098,11 @@ function loadDataSource(data) {
         for (move in customMoves) {
             moves[move] = customMoves[move]
             moves[move]["bp"] = customMoves[move]["basePower"]
-
-            MOVES_BY_ID[8][move.replace(/-|,|'|’| /g, "").toLowerCase()] = customMoves[move]
+            const customMoveId = move.replace(/-|,|'|’| /g, "").toLowerCase()
+            // Register for current gen and gen 8
+            if (!MOVES_BY_ID[g]) { MOVES_BY_ID[g] = {} }
+            MOVES_BY_ID[g][customMoveId] = Object.assign({ basePower: customMoves[move]["basePower"], flags: {} }, customMoves[move])
+            MOVES_BY_ID[8][customMoveId] = customMoves[move]
         }
     }
     moves['(No Move)'] = moves['-'] = {
@@ -1282,32 +1300,50 @@ $(document).ready(function() {
         checkAndLoadScript(`./backups/${backupFiles[TITLE]}.js`, {
                 onLoad: (src) => {
                     npoint_data = backup_data
-                    loadDataSource(npoint_data)
-                    final_type_chart = construct_type_chart()
 
-                    if (mechanics == "hge") {
-                        initHGE()
-                    }
-
-                    setTimeout(function() {
-                        if (localStorage["left"]) {
-                            var set = localStorage["right"]
-                            $('.opposing').val(set)
-                            $('.opposing').change()
-                            $('.opposing .select2-chosen').text(set)
-                            if ($('.info-group.opp > * > .forme').is(':visible')) {
-                                $('.info-group.opp > * > .forme').change()
-                            }
-                        }
+                    const proceed = () => {
+                        loadDataSource(npoint_data)
+                        final_type_chart = construct_type_chart()
 
                         if (mechanics == "hge") {
-                            $('.hp-cntrl label, .z-btn').hide()
+                            initHGE()
                         }
 
-                        if (localStorage["right"]) {
-                            $(`[data-id='${localStorage["left"]}']`).click()
-                        }             
-                    }, 20)
+                        setTimeout(function() {
+                            if (localStorage["left"]) {
+                                var set = localStorage["right"]
+                                $('.opposing').val(set)
+                                $('.opposing').change()
+                                $('.opposing .select2-chosen').text(set)
+                                if ($('.info-group.opp > * > .forme').is(':visible')) {
+                                    $('.info-group.opp > * > .forme').change()
+                                }
+                            }
+
+                            if (mechanics == "hge") {
+                                $('.hp-cntrl label, .z-btn').hide()
+                            }
+
+                            if (localStorage["right"]) {
+                                $(`[data-id='${localStorage["left"]}']`).click()
+                            }             
+                        }, 20)
+                    }
+
+                    if (type_mod == 'mh_em') {
+                        checkAndLoadScript(`./js/custom_moves_mhe.js`, {
+                            onLoad: () => {
+                                if (window.mheMoves) {
+                                    npoint_data.moves = Object.assign({}, npoint_data.moves || {}, window.mheMoves)
+                                }
+                                proceed()
+                            },
+                            onNotFound: () => proceed(),
+                            onError: () => proceed()
+                        })
+                    } else {
+                        proceed()
+                    }
 
                 },
                 onNotFound: (src) => console.log(`Not found: ${src}`)
@@ -1318,29 +1354,47 @@ $(document).ready(function() {
    } else {
         $.get(npoint, function(data){
             npoint_data = data
-            loadDataSource(data)
 
-            if (mechanics == "hge") {
-                initHGE()
-            }
+            const proceed = () => {
+                loadDataSource(npoint_data)
 
-            final_type_chart = construct_type_chart()
-
-            setTimeout(function() {
-                if (localStorage["left"]) {
-                    var set = localStorage["right"]
-                    $('.opposing').val(set)
-                    $('.opposing').change()
-                    $('.opposing .select2-chosen').text(set)
-                    if ($('.info-group.opp > * > .forme').is(':visible')) {
-                        $('.info-group.opp > * > .forme').change()
-                    }
+                if (mechanics == "hge") {
+                    initHGE()
                 }
 
-                if (localStorage["right"]) {
-                    $(`[data-id='${localStorage["left"]}']`).click()
-                }             
-            }, 100)
+                final_type_chart = construct_type_chart()
+
+                setTimeout(function() {
+                    if (localStorage["left"]) {
+                        var set = localStorage["right"]
+                        $('.opposing').val(set)
+                        $('.opposing').change()
+                        $('.opposing .select2-chosen').text(set)
+                        if ($('.info-group.opp > * > .forme').is(':visible')) {
+                            $('.info-group.opp > * > .forme').change()
+                        }
+                    }
+
+                    if (localStorage["right"]) {
+                        $(`[data-id='${localStorage["left"]}']`).click()
+                    }             
+                }, 100)
+            }
+
+            if (type_mod == 'mh_em') {
+                checkAndLoadScript(`./js/custom_moves_mhe.js`, {
+                    onLoad: () => {
+                        if (window.mheMoves) {
+                            npoint_data.moves = Object.assign({}, npoint_data.moves || {}, window.mheMoves)
+                        }
+                        proceed()
+                    },
+                    onNotFound: () => proceed(),
+                    onError: () => proceed()
+                })
+            } else {
+                proceed()
+            }
            
         })
    }
