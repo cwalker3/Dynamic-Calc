@@ -187,7 +187,11 @@ if (damageGen != 8 && damageGen != 7) {
         }
         else {
             if (invert) {
-                var inverted_dmg = (1 / gen.types.get((0, util_1.toID)(move.type)).effectiveness[type])
+                var moveType_1 = gen.types.get((0, util_1.toID)(move.type));
+                if (!moveType_1 || typeof moveType_1.effectiveness === 'undefined' || typeof moveType_1.effectiveness[type] === 'undefined') {
+                    return 1;
+                }
+                var inverted_dmg = (1 / moveType_1.effectiveness[type])
                 if (inverted_dmg == Infinity) {
                     inverted_dmg = 2
                 }
@@ -219,7 +223,11 @@ if (damageGen != 8 && damageGen != 7) {
                         }
                     }
                 }
-                return gen.types.get((0, util_1.toID)(move.type)).effectiveness[type];
+                var moveType = gen.types.get((0, util_1.toID)(move.type));
+                if (!moveType || typeof moveType.effectiveness === 'undefined' || typeof moveType.effectiveness[type] === 'undefined') {
+                    return 1;
+                }
+                return moveType.effectiveness[type];
             }
             
         }
