@@ -554,6 +554,11 @@ var parallelEm = (0, util_1.extend)(true, {}, GSC, {
     }
 });
 
+var mhEmerald = (0, util_1.extend)(true, {}, ADV, {
+    Water: { Ice: 0.5 },
+    Dragon: { Rock: 0.5 }
+});
+
 
 
 var SM = XY;
@@ -565,6 +570,10 @@ if (type_mod == "plat_redux") {
 
 if (type_mod == "par_em") {
     SS = parallelEm
+}
+
+if (type_mod == "mh_em") {
+    ADV = mhEmerald
 }
 
 
