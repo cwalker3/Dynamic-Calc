@@ -30,17 +30,16 @@ var items_1 = require("../items");
 var result_1 = require("../result");
 var util_1 = require("./util");
 function calculateADV(gen, attacker, defender, move, field) {
-    if (type_chart == 3) {
-        
+    // In Gen 3, default behavior is type-based categories.
+    // If URL param pss=1 is present, honor Physical/Special Split and skip overrides.
+    if (type_chart == 3 && !(typeof pss !== 'undefined' && (pss === '1' || pss === 1 || pss === true))) {
         if ((move.hasType('Normal', 'Fighting', 'Flying', 'Ground', 'Rock', 'Bug', 'Ghost', 'Poison', 'Steel'))) {
             isPhysical = true
             move.category = 'Physical'
-
-        } 
+        }
         if ((move.hasType('Water', 'Grass', 'Fire', 'Ice', 'Electric', 'Psychic', 'Dragon', 'Dark'))) {
             isPhysical = false
-            move.category = "Special"
-
+            move.category = 'Special'
         }
     }
 

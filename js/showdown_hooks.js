@@ -1125,6 +1125,7 @@ customPoks = params.get('customPoks');
 evsOn = params.get('evs');
 type_chart = parseInt(params.get('types'))
 type_mod = params.get('type_mod')
+pss = params.get('pss')
 switchIn = parseInt(params.get('switchIn'))
 noSwitch = params.get('noSwitch')
 hasEvs = params.get('evs') != '0'
@@ -1300,50 +1301,32 @@ $(document).ready(function() {
         checkAndLoadScript(`./backups/${backupFiles[TITLE]}.js`, {
                 onLoad: (src) => {
                     npoint_data = backup_data
+                    loadDataSource(npoint_data)
+                    final_type_chart = construct_type_chart()
 
-                    const proceed = () => {
-                        loadDataSource(npoint_data)
-                        final_type_chart = construct_type_chart()
+                    if (mechanics == "hge") {
+                        initHGE()
+                    }
 
-                        if (mechanics == "hge") {
-                            initHGE()
+                    setTimeout(function() {
+                        if (localStorage["left"]) {
+                            var set = localStorage["right"]
+                            $('.opposing').val(set)
+                            $('.opposing').change()
+                            $('.opposing .select2-chosen').text(set)
+                            if ($('.info-group.opp > * > .forme').is(':visible')) {
+                                $('.info-group.opp > * > .forme').change()
+                            }
                         }
 
-                        setTimeout(function() {
-                            if (localStorage["left"]) {
-                                var set = localStorage["right"]
-                                $('.opposing').val(set)
-                                $('.opposing').change()
-                                $('.opposing .select2-chosen').text(set)
-                                if ($('.info-group.opp > * > .forme').is(':visible')) {
-                                    $('.info-group.opp > * > .forme').change()
-                                }
-                            }
+                        if (mechanics == "hge") {
+                            $('.hp-cntrl label, .z-btn').hide()
+                        }
 
-                            if (mechanics == "hge") {
-                                $('.hp-cntrl label, .z-btn').hide()
-                            }
-
-                            if (localStorage["right"]) {
-                                $(`[data-id='${localStorage["left"]}']`).click()
-                            }             
-                        }, 20)
-                    }
-
-                    if (type_mod == 'mh_em') {
-                        checkAndLoadScript(`./js/custom_moves_mhe.js`, {
-                            onLoad: () => {
-                                if (window.mheMoves) {
-                                    npoint_data.moves = Object.assign({}, npoint_data.moves || {}, window.mheMoves)
-                                }
-                                proceed()
-                            },
-                            onNotFound: () => proceed(),
-                            onError: () => proceed()
-                        })
-                    } else {
-                        proceed()
-                    }
+                        if (localStorage["right"]) {
+                            $(`[data-id='${localStorage["left"]}']`).click()
+                        }             
+                    }, 20)
 
                 },
                 onNotFound: (src) => console.log(`Not found: ${src}`)
@@ -1354,47 +1337,29 @@ $(document).ready(function() {
    } else {
         $.get(npoint, function(data){
             npoint_data = data
+            loadDataSource(data)
 
-            const proceed = () => {
-                loadDataSource(npoint_data)
+            if (mechanics == "hge") {
+                initHGE()
+            }
 
-                if (mechanics == "hge") {
-                    initHGE()
+            final_type_chart = construct_type_chart()
+
+            setTimeout(function() {
+                if (localStorage["left"]) {
+                    var set = localStorage["right"]
+                    $('.opposing').val(set)
+                    $('.opposing').change()
+                    $('.opposing .select2-chosen').text(set)
+                    if ($('.info-group.opp > * > .forme').is(':visible')) {
+                        $('.info-group.opp > * > .forme').change()
+                    }
                 }
 
-                final_type_chart = construct_type_chart()
-
-                setTimeout(function() {
-                    if (localStorage["left"]) {
-                        var set = localStorage["right"]
-                        $('.opposing').val(set)
-                        $('.opposing').change()
-                        $('.opposing .select2-chosen').text(set)
-                        if ($('.info-group.opp > * > .forme').is(':visible')) {
-                            $('.info-group.opp > * > .forme').change()
-                        }
-                    }
-
-                    if (localStorage["right"]) {
-                        $(`[data-id='${localStorage["left"]}']`).click()
-                    }             
-                }, 100)
-            }
-
-            if (type_mod == 'mh_em') {
-                checkAndLoadScript(`./js/custom_moves_mhe.js`, {
-                    onLoad: () => {
-                        if (window.mheMoves) {
-                            npoint_data.moves = Object.assign({}, npoint_data.moves || {}, window.mheMoves)
-                        }
-                        proceed()
-                    },
-                    onNotFound: () => proceed(),
-                    onError: () => proceed()
-                })
-            } else {
-                proceed()
-            }
+                if (localStorage["right"]) {
+                    $(`[data-id='${localStorage["left"]}']`).click()
+                }             
+            }, 100)
            
         })
    }
