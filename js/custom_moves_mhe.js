@@ -212,3 +212,28 @@ window.mheMoves = {
     "drain": [1,2]
   }
 };
+
+// Auto-populate every known move with its current type/category so P/S split works without
+// manually listing all moves. Manually defined entries above take precedence.
+(function populateAllMovesForMHE() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var genIndex = parseInt(params.get('gen')) || 3;
+    var registry = (typeof MOVES_BY_ID !== 'undefined') ? MOVES_BY_ID[genIndex] : null;
+    if (!registry) return;
+    for (var id in registry) {
+      if (!Object.prototype.hasOwnProperty.call(registry, id)) continue;
+      var m = registry[id];
+      var name = m && m.name ? m.name : id;
+      if (!window.mheMoves[name]) {
+        window.mheMoves[name] = {
+          basePower: typeof m.basePower === 'number' ? m.basePower : 0,
+          type: m.type || 'Normal',
+          category: m.category || 'Status'
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('MHE: populateAllMovesForMHE failed', e);
+  }
+})();
