@@ -865,8 +865,11 @@ function addSets(pokes, name) {
 		
 		for (var j = 0; j < currentRow.length; j++) {
 			currentRow[j] = checkExeptions(currentRow[j].trim());
-			if (calc.SPECIES[8][currentRow[j].trim()] !== undefined) {
-				currentPoke = calc.SPECIES[8][currentRow[j].trim()];
+			// Prefer the active gen pokedex (which may include custom species) over a hardcoded gen 8 list
+			var speciesName = currentRow[j].trim();
+			var activeDex = (typeof pokedex !== 'undefined' && pokedex) ? pokedex : calc.SPECIES[gen] || calc.SPECIES[8];
+			if (activeDex[speciesName] !== undefined) {
+				currentPoke = activeDex[speciesName];
 				currentPoke.name = currentRow[j].trim();
 				currentPoke.item = getItem(currentRow, j + 1);
 				if (j === 1 && currentRow[0].trim()) {
