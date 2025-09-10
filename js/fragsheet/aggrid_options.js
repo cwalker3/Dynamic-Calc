@@ -154,7 +154,7 @@ function setColumnDefs() {
             width: 80,
             cellRenderer: (params) => {
               if (params.data.species) {
-                return `<img src="./img/pokesprite/${params.data.species.toLowerCase().replace(/[ :]/g, '-').replace(/[.’]/g, '')}.png" style="width: 60px; height: 60px; object-fit: cover;margin-top: 10px;" />`;
+                return `<img src="./img/pokesprite/${params.data.species.toLowerCase().replace(/[ :]/g, '-').replace(/[.’]/g, '').replace(/\*/g, '+')}.png" style="width: 60px; height: 60px; object-fit: cover;margin-top: 10px;" />`;
               }
               return '';
             },
@@ -357,7 +357,7 @@ function displayFragHistory(rowData) {
             let trName = extractTrainerName(frag)
             
             let pokName = extractPokemonName(frag)
-            let spritePath = `./img/pokesprite/${pokName.toLowerCase().replace(/[ :'.-]+/g, '-').replace(/^-|-glitched$|-$/g, '')}.png`
+            let spritePath = `./img/pokesprite/${pokName.toLowerCase().replace(/[ :'.-]+/g, '-').replace(/\*/g, '+').replace(/^-|-glitched$|-$/g, '')}.png`
             let typing = splitData[TITLE]["types"][i]
 
 
@@ -722,4 +722,3 @@ document.addEventListener('DOMContentLoaded', () => {
     gridDiv = document.querySelector('#myGrid');
     gridApi = agGrid.createGrid(gridDiv, gridOptions);
 });
-

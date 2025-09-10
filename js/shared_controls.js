@@ -34,6 +34,25 @@ localStorage.boxspriteindex = 1
 }
 sprite_style = boxSprites[parseInt(localStorage.boxspriteindex)]
 
+// Prefer PNG sprites; fall back to GIF if PNG missing
+function setPokeSprite(selector, folder, name) {
+    try {
+        var $img = $(selector);
+        // Clean previous handlers to avoid stacking
+        $img.off('error.sprite');
+        const pngPath = `./img/${folder}/${name}.png`;
+        const gifPath = `./img/${folder}/${name}.gif`;
+        // If PNG fails to load, try GIF once
+        $img.one('error.sprite', function () {
+            $(this).off('error.sprite').attr('src', gifPath);
+        });
+        $img.attr('src', pngPath);
+    } catch (e) {
+        // As a last resort, set GIF directly
+        $(selector).attr('src', `./img/${folder}/${name}.gif`);
+    }
+}
+
 function startsWith(string, target) {
 	return (string || '').slice(0, target.length) === target;
 }
@@ -533,7 +552,7 @@ function refresh_next_in() {
 		if (next_poks[i][0].includes($('input.opposing').val()) && noSwitch != "1"){
 			continue
 		}
-		var pok_name = next_poks[i][0].split(" (")[0].toLowerCase().replace(" ","-").replace(".","").replace("’","").replace(":","-")
+		var pok_name = next_poks[i][0].split(" (")[0].toLowerCase().replace(" ","-").replace(".","").replace("’","").replace(":","-").replace("*", "+")
 
 		if (pok_name.includes("galarian-")) {
 			pok_name = pok_name.split("galarian-")[1] +  "-galar"
@@ -696,7 +715,7 @@ $(".set-selector").change(function () {
 		} else {
 			$('#trainer-sprite').hide()
 		}
-		var pokesprite = pokemonName.toLowerCase().replace(" ", "-").replace(".","").replace("’","").replace(":","-")
+		var pokesprite = pokemonName.toLowerCase().replace(" ", "-").replace(".","").replace("’","").replace(":","-").replace("*", "+")
 
 		if (pokesprite.includes("galarian-")) {
 			pokesprite = pokesprite.split("galarian-")[1] +  "-galar"
@@ -711,7 +730,7 @@ $(".set-selector").change(function () {
 		}
 
 
-		$('#p2 .poke-sprite').attr('src', `./img/${trainerSprites}/${pokesprite.replace("-glitched", "")}.${suffix}`)
+		setPokeSprite('#p2 .poke-sprite', trainerSprites, pokesprite.replace("-glitched", ""))
 
 		if ($('#player-poks-filter:visible').length > 0) {
 	       box_rolls() 
@@ -719,9 +738,9 @@ $(".set-selector").change(function () {
 
 	} else {
 		if (SETDEX_BW) {
-			var pokesprite = pokemonName.toLowerCase().replace(" ", "-").replace(".","").replace("’","")
+			var pokesprite = pokemonName.toLowerCase().replace(" ", "-").replace(".","").replace("’","").replace("*", "+")
 			
-			$('#p1 .poke-sprite').attr('src', `./img/${playerSprites}/${pokesprite}.${suffix}`)
+			setPokeSprite('#p1 .poke-sprite', playerSprites, pokesprite)
 
 
 

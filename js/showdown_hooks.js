@@ -238,7 +238,7 @@ function get_box() {
     for (i in names) {
         if (names[i].includes("My Box")) {
             box.push(names[i].split("[")[0])
-            var pok_name = names[i].split(" (")[0].toLowerCase().replace(" ","-").replace(".","").replace(".","").replace("’","").replace(":","-")
+            var pok_name = names[i].split(" (")[0].toLowerCase().replace(" ","-").replace(".","").replace(".","").replace("’","").replace(":","-").replace("*", "+")
             var pok = `<img class="trainer-pok left-side ${sprite_style}" src="./img/${sprite_style}/${pok_name}.png" data-id="${names[i].split("[")[0]}">`
             box_html += pok
         }   
@@ -584,7 +584,7 @@ function displayParty() {
         for (i in currentParty) {
             species_name = currentParty[i]
 
-            var sprite_name = species_name.toLowerCase().replace(" ","-").replace(".","").replace("’","").replace(":","-")
+            var sprite_name = species_name.toLowerCase().replace(" ","-").replace(".","").replace("’","").replace(":","-").replace("*", "+")
             var set_data = setdex[species_name]["My Box"]
             var data_id = species_name + " (My Box)"
 
@@ -1529,7 +1529,7 @@ $(document).ready(function() {
 
         var data_id = $(this).attr('data-id')
         var species_name = data_id.split(" (")[0]
-        var sprite_name = species_name.toLowerCase().replace(" ","-").replace(".","").replace("’","").replace(":","-")
+        var sprite_name = species_name.toLowerCase().replace(" ","-").replace(".","").replace("’","").replace(":","-").replace("*", "+")
         var set_data = customSets[species_name]["My Box"]
         set_data['moves'] = padArray(set_data['moves'], 4, "-")
 
