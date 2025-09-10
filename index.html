@@ -54,13 +54,22 @@
        "a0e5b4fa06d9e7762210": "Parallel Emerald Normal",
        "e91164d90d06a009e6cc": "Radical Red 4.1 Hardcore",
        "ced457ba9aa55731616c": "Radical Red 4.1 Normal",
-       "0d8b65ba6796bf2b3d4c": "White 2 Kaizo"
+       "0d8b65ba6796bf2b3d4c": "White 2 Kaizo",
+       "c9f69a7f2287fc04adb9": "Monster Hunter Emerald"
    }
         // https://hzla.github.io/Dynamic-Calc-Decomps/?data=e91164d90d06a009e6cc&dmgGen=8&gen=8&types=6&noSwitch=1
         if (SOURCES[params.get('data')]) {
             TITLE = SOURCES[params.get('data')] || "NONE"
-            document.title = TITLE + " Calculator"
-            
+            if (TITLE === 'Monster Hunter Emerald') {
+                document.title = TITLE
+            } else {
+                document.title = TITLE + " Calculator"
+            }
+            // Also show a centered heading
+            window.addEventListener('DOMContentLoaded', function() {
+                var rt = document.getElementById('rom-title');
+                if (rt && TITLE) { rt.textContent = TITLE; }
+            });
         }
     </script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=UA-26211653-3"></script>
