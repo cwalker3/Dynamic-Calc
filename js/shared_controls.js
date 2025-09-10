@@ -41,11 +41,29 @@ function setPokeSprite(selector, folder, name) {
         // Clean previous handlers to avoid stacking
         $img.off('error.sprite');
         const pngPath = `./img/${folder}/${name}.png`;
+        const altPngPath = (folder === 'front' || folder === 'back') ? `./img/newhd/${name}.png` : null;
         const gifPath = `./img/${folder}/${name}.gif`;
-        // If PNG fails to load, try GIF once
-        $img.one('error.sprite', function () {
-            $(this).off('error.sprite').attr('src', gifPath);
-        });
+
+        if (altPngPath) {
+            // Try folder PNG -> newhd PNG -> (finally) GIF
+            $img.one('error.sprite', function firstFail() {
+                $(this).off('error.sprite');
+                if (altPngPath) {
+                    $img.one('error.sprite', function secondFail() {
+                        $(this).off('error.sprite').attr('src', gifPath);
+                    });
+                    $(this).attr('src', altPngPath);
+                } else {
+                    $(this).attr('src', gifPath);
+                }
+            });
+        } else {
+            // Try folder PNG -> GIF
+            $img.one('error.sprite', function () {
+                $(this).off('error.sprite').attr('src', gifPath);
+            });
+        }
+
         $img.attr('src', pngPath);
     } catch (e) {
         // As a last resort, set GIF directly
