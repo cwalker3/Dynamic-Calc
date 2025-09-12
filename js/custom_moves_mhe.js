@@ -147,7 +147,7 @@ window.mheMoves = {
     "makesContact": true,
     "secondaries": [{"chance": 30, "status": "psn"}]
   },
-  "Dragon Hammer": {
+  "Dragonhammer": {
     "basePower": 90,
     "type": "Dragon",
     "category": "Physical"
