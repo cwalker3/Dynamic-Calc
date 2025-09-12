@@ -4,7 +4,7 @@ console.log('mhe moves')
 window.mheMoves = {
   "Acidic Clash": {
     "basePower": 80,
-    "type": "Poison",
+    "type": "Rock",
     "category": "Physical",
     "secondaries": [{"chance": 100, "boosts": {"def": -1}}]
   },

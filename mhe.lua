@@ -1957,13 +1957,12 @@ function export()
         -- Removed box header printing per request
         for i = 0, 29 do
             local slot = boxBase + (i * MON_SIZE)
-            if (emu:read32(slot) ~= 0) then
-                local mon = game:_readBoxMon(slot)
-                local hasSpecies = (mon.hasSpecies == 1) or (mon.species and mon.species > 0)
-                local idxOK = (mon.species and ((mon.species * 2) <= #ability))
-                if hasSpecies and idxOK then
-                    printBoxMon(slot)
-                end
+            -- Read and validate via decoded data rather than raw dword check
+            local mon = game:_readBoxMon(slot)
+            local hasSpecies = (mon.hasSpecies == 1) or (mon.species and mon.species > 0)
+            local idxOK = (mon.species and ((mon.species * 2) <= #ability))
+            if hasSpecies and idxOK then
+                printBoxMon(slot)
             end
         end
     end
