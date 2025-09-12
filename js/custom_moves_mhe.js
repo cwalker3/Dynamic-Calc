@@ -8,6 +8,11 @@ window.mheMoves = {
     "category": "Physical",
     "secondaries": [{"chance": 100, "boosts": {"def": -1}}]
   },
+  "Fly": {
+    "basePower": 95,
+    "type": "Flying",
+    "category": "Physical",
+  },
   "Hyper Tackle": {
     "basePower": 130,
     "type": "Water",
