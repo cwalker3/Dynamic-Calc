@@ -215,5 +215,10 @@ window.mheMoves = {
     "type": "Grass",
     "category": "Physical",
     "drain": [1,2]
+  },
+  "Outrage": {
+    "basePower": 120,
+    "type": "Dragon",
+    "category": "Physical"
   }
 };
