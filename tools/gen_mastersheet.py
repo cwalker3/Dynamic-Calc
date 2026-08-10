@@ -439,36 +439,53 @@ def build(key, title, areas_path=None):
   %s
 </div>
 <script>
-$(function () {
+(function () {
+    // Track which view is up rather than asking :visible for it. :visible is
+    // measured from the element's box, so it answers false whenever layout has
+    // not produced one, and the toggle then just re-asserts the state it is
+    // already in and appears dead.
+    var sheetUp = true
+
     function showSheet(on) {
+        sheetUp = on
         $('#content-container').toggle(on)
         $('#calc-view').toggle(!on)
         $('#ms-toggle').text(on ? 'Calculator' : 'Mastersheet')
     }
 
-    // the sheet is what this page is for, so open on it
-    $('body').css('padding-top', '40px')
-    showSheet(true)
+    // Deliberately not inside $(document).ready. jQuery fires ready callbacks
+    // from a single list, so an exception in any earlier one stops every later
+    // one, and the calc's own init throws here. Delegated binds and an
+    // immediate call keep this working regardless.
+    var touched = false
 
-    $('#ms-toggle').on('click', function () {
-        showSheet(!$('#content-container').is(':visible'))
+    $(document).on('click', '#ms-toggle', function () {
+        touched = true
+        showSheet(!sheetUp)
     })
 
-    // clicking a trainer loads their team on the right, so follow them over to
-    // the calculator rather than leaving you looking at the sheet
-    $(document).on('click', '.trainer-name', function () { showSheet(false) })
+    // a trainer click loads their team on the right, so follow it to the calc
+    $(document).on('click', '.trainer-name', function () {
+        touched = true
+        showSheet(false)
+    })
 
-    // showdown_hooks' Tab handler toggles .wrapper too, which on this page is
-    // only the results header rather than the whole calc. Put it back and keep
+    // showdown_hooks' Tab handler also toggles .wrapper, which on this page is
+    // only the results header rather than the whole calc. Put it back, and keep
     // the two views in step with whatever Tab did to the sheet.
     $(document).on('keydown', function (e) {
         if ((e.keyCode || e.which) !== 9) return
+        touched = true
         setTimeout(function () {
             $('.wrapper').show()
-            showSheet($('#content-container').is(':visible'))
+            showSheet(!sheetUp)
         }, 0)
     })
-})
+
+    document.body.style.paddingTop = '40px'
+    showSheet(true)
+    window.addEventListener('load', function () { if (!touched) showSheet(true) })
+})()
 </script>
 """ % jump
 

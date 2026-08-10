@@ -2012,36 +2012,53 @@
   <a href="#sec-0" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Roxanne</a><a href="#sec-1" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Brawly</a><a href="#sec-2" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Wattson</a><a href="#sec-3" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Flannery</a><a href="#sec-4" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Norman</a><a href="#sec-5" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Winona</a><a href="#sec-6" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Tate&amp;Liza</a><a href="#sec-7" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Wallace</a><a href="#sec-8" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Elite 4</a><a href="#sec-9" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Post Game</a><a href="#sec-enc" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Encounters</a>
 </div>
 <script>
-$(function () {
+(function () {
+    // Track which view is up rather than asking :visible for it. :visible is
+    // measured from the element's box, so it answers false whenever layout has
+    // not produced one, and the toggle then just re-asserts the state it is
+    // already in and appears dead.
+    var sheetUp = true
+
     function showSheet(on) {
+        sheetUp = on
         $('#content-container').toggle(on)
         $('#calc-view').toggle(!on)
         $('#ms-toggle').text(on ? 'Calculator' : 'Mastersheet')
     }
 
-    // the sheet is what this page is for, so open on it
-    $('body').css('padding-top', '40px')
-    showSheet(true)
+    // Deliberately not inside $(document).ready. jQuery fires ready callbacks
+    // from a single list, so an exception in any earlier one stops every later
+    // one, and the calc's own init throws here. Delegated binds and an
+    // immediate call keep this working regardless.
+    var touched = false
 
-    $('#ms-toggle').on('click', function () {
-        showSheet(!$('#content-container').is(':visible'))
+    $(document).on('click', '#ms-toggle', function () {
+        touched = true
+        showSheet(!sheetUp)
     })
 
-    // clicking a trainer loads their team on the right, so follow them over to
-    // the calculator rather than leaving you looking at the sheet
-    $(document).on('click', '.trainer-name', function () { showSheet(false) })
+    // a trainer click loads their team on the right, so follow it to the calc
+    $(document).on('click', '.trainer-name', function () {
+        touched = true
+        showSheet(false)
+    })
 
-    // showdown_hooks' Tab handler toggles .wrapper too, which on this page is
-    // only the results header rather than the whole calc. Put it back and keep
+    // showdown_hooks' Tab handler also toggles .wrapper, which on this page is
+    // only the results header rather than the whole calc. Put it back, and keep
     // the two views in step with whatever Tab did to the sheet.
     $(document).on('keydown', function (e) {
         if ((e.keyCode || e.which) !== 9) return
+        touched = true
         setTimeout(function () {
             $('.wrapper').show()
-            showSheet($('#content-container').is(':visible'))
+            showSheet(!sheetUp)
         }, 0)
     })
-})
+
+    document.body.style.paddingTop = '40px'
+    showSheet(true)
+    window.addEventListener('load', function () { if (!touched) showSheet(true) })
+})()
 </script>
 
 <div id="content-container">
