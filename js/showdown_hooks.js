@@ -199,7 +199,8 @@ function abv(s) {
 
 function get_custom_trainer_names() {
     var all_poks = setdex
-    var trainer_names = {} 
+    var trainer_names = {}
+    var lead_sub_index = {}
 
     for (const [pok_name, poks] of Object.entries(all_poks)) {
         var pok_tr_names = Object.keys(poks)
@@ -217,9 +218,14 @@ function get_custom_trainer_names() {
                     setdex[pok_name][trainer_name]["prev"] = prev
                 }           
            }
-           if (sub_index == 0) {
-                trainer_names[poks[trainer_name]["tr_id"] || 0] = `${pok_name} (${trainer_name})[${sub_index}]`
-           }     
+           // the lead is the lowest sub_index rather than strictly 0: double
+           // battle pairs often start numbering above it and would otherwise
+           // have no entry here at all, breaking their nav tags
+           var tr_id = poks[trainer_name]["tr_id"] || 0
+           if (!(tr_id in lead_sub_index) || sub_index < lead_sub_index[tr_id]) {
+                lead_sub_index[tr_id] = sub_index
+                trainer_names[tr_id] = `${pok_name} (${trainer_name})[${sub_index}]`
+           }
         }      
     }
     return trainer_names
@@ -808,6 +814,52 @@ function normalizeSetAbilities(sets) {
     }
 }
 
+// Some data sources ship a trainer order (npoint_data.order, keyed by tr_id) and
+// the calc reads next/prev off it to drive the nav tags. The gen 6 exports carry
+// neither, so derive both: group sets into trainers by their "Lvl N Trainer"
+// name, order by the level you first meet them at, and hand out tr_id/next/prev.
+// Returns the trainer names in that order.
+function deriveTrainerOrder(sets) {
+    var trainers = {}
+
+    for (var species in sets) {
+        for (var setName in sets[species]) {
+            var match = setName.trim().match(/^Lvl\s+(\d+)\s+(.*)$/)
+            if (!match) continue
+
+            var name = match[2].trim()
+            if (!trainers[name]) trainers[name] = { level: Infinity, entries: [] }
+            trainers[name].level = Math.min(trainers[name].level, parseInt(match[1]))
+            trainers[name].entries.push(sets[species][setName])
+        }
+    }
+
+    // plain code point ordering on ties, so tools/gen_mastersheet.py can produce
+    // the same indexes without reimplementing a collation
+    var ordered = Object.keys(trainers).sort(function (a, b) {
+        return trainers[a].level - trainers[b].level || (a < b ? -1 : a > b ? 1 : 0)
+    })
+
+    for (var i = 0; i < ordered.length; i++) {
+        var entries = trainers[ordered[i]].entries
+        for (var j = 0; j < entries.length; j++) {
+            entries[j]["tr_id"] = i
+            if (i > 0) entries[j]["prev"] = i - 1
+            if (i < ordered.length - 1) entries[j]["next"] = i + 1
+        }
+    }
+    return ordered
+}
+
+function hasTrainerIds(sets) {
+    for (var species in sets) {
+        for (var setName in sets[species]) {
+            if (typeof sets[species][setName]["tr_id"] != "undefined") return true
+        }
+    }
+    return false
+}
+
 function removeEvs(sets) {
     for (const species_name in sets) {
         const setdata = sets[species_name];    
@@ -847,6 +899,10 @@ function loadDataSource(data) {
     }
 
     normalizeSetAbilities(data["formatted_sets"])
+
+    if (!hasTrainerIds(data["formatted_sets"])) {
+        deriveTrainerOrder(data["formatted_sets"])
+    }
 
     SETDEX_BW = data["formatted_sets"]
     SETDEX_ADV = data["formatted_sets"]
@@ -1291,7 +1347,8 @@ $(document).ready(function() {
         "Blaze Black 2/Volt White 2 Redux 1.4": "bb2redux",
         "Sterling Silver 1.14": "sterlingsilver",
         "Renegade Platinum": "renplat",
-        "Vintage White": "vw"
+        "Vintage White": "vw",
+        "Rising Ruby/Sinking Saphire": "rrss"
     }
     encs = `https://api.npoint.io/c39f79b412a6f19f3c4f`
 
