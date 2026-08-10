@@ -69,6 +69,9 @@ g6Dirty = false         // true once edits exist that are not on disk yet
 g6LastModified = 0      // mtime of the file as last read, drives auto sync
 g6AutoSyncTimer = null
 g6BackupDirHandle = null // folder auto backups are dropped into, when enabled
+// Brave defines the pickers but blocks the call, so feature detection alone is
+// not enough: this records that a picker actually threw when we tried it
+g6PickerBlocked = false
 
 G6_AUTO_SYNC_MS = 3000
 // distinctive enough that pruning can never touch a file the calc did not write
@@ -339,6 +342,13 @@ function g6ReadSave(buffer, fileName, quiet) {
 
     changelog = "<h4>Changelog:</h4>"
     changelog += `<p>${fileName} loaded (${detected.name}, ${g6Party.length} in party)</p>`
+
+    // otherwise the missing buttons just look like something is broken
+    if (!window.showOpenFilePicker) {
+        changelog += `<p>This browser cannot open a file by handle, so auto sync, auto backup and `
+            + `writing back to the save folder are unavailable. Use Download .sav here, or a `
+            + `Chromium browser (Chrome, Edge, Vivaldi, Opera) for the rest.</p>`
+    }
     if ($('#changelog').length == 0) {
         $('#clearSets').after("<p id='changelog'></p>")
     }
@@ -638,6 +648,7 @@ async function g6WriteToSaveFolder() {
     } catch (error) {
         if (error && error.name == 'AbortError') return
         console.error(error)
+        if (!g6DirHandle) g6DisableHandleFeatures(error && error.message)
         alert(`Could not write to the save folder: ${error && error.message}`)
     }
 }
@@ -705,6 +716,26 @@ async function g6SyncSave() {
 // lastModified never changes no matter what happens on disk.
 function g6CanAutoSync() {
     return !!(g6SaveFileHandle || g6FileHandle)
+}
+
+// The pickers existing does not mean they work, so anything that depends on a
+// handle also has to respect a picker we have already seen refuse.
+function g6HandlesUsable() {
+    return !!window.showDirectoryPicker && !g6PickerBlocked
+}
+
+// Called the first time a picker refuses. Pulls the features that cannot work
+// rather than leaving buttons that error every time they are pressed.
+function g6DisableHandleFeatures(reason) {
+    g6PickerBlocked = true
+    g6StopAutoSync()
+    $('#write-sav, #auto-backup, #auto-sync').remove()
+
+    changelog += `<p>This browser blocked the file picker${reason ? ` (${reason})` : ""}, so auto sync, `
+        + `auto backup and writing back to the save folder are unavailable. Use Download .sav here. `
+        + `Brave blocks it by default, enable "File System Access API" at `
+        + `brave://flags/#file-system-access-api and relaunch.</p>`
+    $('#changelog').html(changelog)
 }
 
 function g6StartAutoSync() {
@@ -827,6 +858,7 @@ async function g6ToggleAutoBackup() {
         g6BackupDirHandle = null
         if (error && error.name == 'AbortError') return
         console.error(error)
+        g6DisableHandleFeatures(error && error.message)
         alert(`Could not use that folder for backups: ${error && error.message}`)
     }
 }
@@ -839,7 +871,7 @@ function g6AddSyncBtn() {
     $('#sync-sav').after(`<button id="auto-sync" class="bs-btn bs-btn-default" onClick='g6ToggleAutoSync()'>Auto Sync: On</button>`)
     g6StartAutoSync()
 
-    if (!window.showDirectoryPicker) return
+    if (!g6HandlesUsable()) return
     $('#auto-sync').after(`<button id="auto-backup" class="bs-btn bs-btn-default" onClick='g6ToggleAutoBackup()'>Auto Backup: Off</button>`)
 }
 
@@ -849,7 +881,7 @@ function g6AddSaveButtons() {
     addSaveBtn()
     $('#write-sav').remove()
 
-    if (!window.showDirectoryPicker) return
+    if (!g6HandlesUsable()) return
     $('#download-sav').after(`<button id="write-sav" class="bs-btn bs-btn-default" onClick='g6WriteToSaveFolder()'>Write to Save</button>`)
 }
 
@@ -884,6 +916,7 @@ function g6Init() {
             // never leave the button looking dead, say what went wrong and let
             // the plain upload take over from here
             console.error(error)
+            g6DisableHandleFeatures(error && error.message)
             alert(`Could not open the file picker: ${error && error.message}\n\nFalling back to a normal file upload.`)
             g6UseUploadFallback()
         }

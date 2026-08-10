@@ -608,13 +608,18 @@ function refresh_next_in() {
 			isLead = "lead"
 		}
 
-		var pok = `<div class="trainer-pok-container no-switch-${noSwitch}">
-			<img class="trainer-pok right-side ${highlight} ${isFainted} ${isLead}" src="./img/${sprite_style}/${pok_name}.png" data-id="${dataID}">`
-
-
 		var species = next_poks[i][0].split(" (")[0]
 		var set_name = next_poks[i][0].split(" (")[1].split(")")[0]
-		var item = setdex[species][set_name]["item"]
+		var set_data = (setdex[species] && setdex[species][set_name]) || {}
+		var item = set_data["item"]
+
+		// the tile has no room for another line, so the ability rides on the
+		// tooltip rather than pushing every preview 17px taller
+		var ability = set_data["ability"]
+		var tooltip = ability && ability != "Any" ? ` title="${species}: ${ability}"` : ""
+
+		var pok = `<div class="trainer-pok-container no-switch-${noSwitch}"${tooltip}>
+			<img class="trainer-pok right-side ${highlight} ${isFainted} ${isLead}" src="./img/${sprite_style}/${pok_name}.png" data-id="${dataID}">`
 
 		if (item && item != "-" && !item.toLowerCase().includes("none")) {
 			item_name = item.toLowerCase().replace(" ", "_").replace("'","") 

@@ -760,6 +760,30 @@ function get_type_info(pok_types, move=false) {
     return result
 }
 
+// Most data sources store a set's ability as a string, but some exporters wrap it
+// in a single element array. That matters because setSelectValueIfValid builds a
+// css selector by concatenation: ["" ] stringifies to "", the selector becomes
+// option[value=''] which matches the "(other)" entry, and the calc then picks
+// "no ability" instead of falling back to the species' ability.
+function normalizeSetAbilities(sets) {
+    const BLANK = ["", "-", "Any"]
+
+    for (const species_name in sets) {
+        const setdata = sets[species_name]
+        for (const set_name in setdata) {
+            const set = setdata[set_name]
+            let ability = set.ability
+
+            if (Array.isArray(ability)) ability = ability.length ? ability[0] : ""
+            if (typeof ability != "string" || BLANK.indexOf(ability.trim()) > -1) {
+                delete set.ability
+            } else {
+                set.ability = ability.trim()
+            }
+        }
+    }
+}
+
 function removeEvs(sets) {
     for (const species_name in sets) {
         const setdata = sets[species_name];    
@@ -797,6 +821,8 @@ function loadDataSource(data) {
             data.poks[pok_subs[pok]] = data.poks[pok]
         }
     }
+
+    normalizeSetAbilities(data["formatted_sets"])
 
     SETDEX_BW = data["formatted_sets"]
     SETDEX_ADV = data["formatted_sets"]

@@ -32,7 +32,7 @@ const imports = { count: 0 };
 const noop = () => stub();
 const stub = () => ({
     length: 0, val: noop, html: noop, show: noop, after: noop, text: noop,
-    attr: noop, on: noop, click: noop, find: noop, first: noop
+    attr: noop, on: noop, off: noop, click: noop, find: noop, first: noop, remove: noop
 });
 const $ = (sel) => {
     if (sel === '.import-team-text') {
@@ -263,6 +263,25 @@ check('edited level visible after reload', textarea.value.includes('Level: 49'))
 
     check('an upload with no handle cannot auto sync',
         (sandbox.g6SaveFileHandle = null, sandbox.g6FileHandle = null, sandbox.g6CanAutoSync() === false));
+
+    // ------------------------------------------------- blocked pickers ---
+    // Brave defines the pickers then refuses the call, so presence alone must
+    // not be treated as support
+    console.log('blocked pickers');
+
+    sandbox.window.showDirectoryPicker = async () => { throw new Error('blocked'); };
+    sandbox.g6PickerBlocked = false;
+    check('a picker that exists counts as usable until proven otherwise',
+        sandbox.g6HandlesUsable() === true);
+
+    sandbox.g6AutoSyncTimer = sandbox.setInterval(() => { }, 1000);
+    sandbox.g6DisableHandleFeatures('blocked');
+    check('a refused picker marks handles unusable', sandbox.g6HandlesUsable() === false);
+    check('a refused picker stops auto sync', sandbox.g6AutoSyncTimer === null);
+
+    delete sandbox.window.showDirectoryPicker;
+    sandbox.g6PickerBlocked = false;
+    check('a browser without the picker is unusable too', sandbox.g6HandlesUsable() === false);
 
     console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`);
     process.exit(failures === 0 ? 0 : 1);
