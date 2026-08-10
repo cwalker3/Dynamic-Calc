@@ -161,7 +161,7 @@ def render_document(title, trainers, data, move_ids, splits):
     # must match deriveTrainerOrder in js/showdown_hooks.js exactly: the calc
     # indexes customLeads by that order, and .trainer-name clicks look it up by
     # this data-index. Lowest level first, plain code point order on ties.
-    ordered = sorted(trainers.items(), key=lambda kv: (min(p["level"] for p in kv[1]), kv[0]))
+    ordered = sorted(trainers.items(), key=lambda kv: (max(p["level"] for p in kv[1]), kv[0]))
     tr_ids = {name: i for i, (name, _) in enumerate(ordered)}
 
     # bucket trainers by the level cap they fall under, so the page reads in
@@ -173,10 +173,12 @@ def render_document(title, trainers, data, move_ids, splits):
     buckets["Post Game"] = []
 
     for name, team in ordered:
-        low = min(p["level"] for p in team)
+        # the ace decides which cap section a trainer belongs to, for the same
+        # reason it decides the order
+        high = max(p["level"] for p in team)
         placed = False
         for i, cap in enumerate(caps):
-            if low <= cap:
+            if high <= cap:
                 label = section_titles[i] if i < len(section_titles) else "Cap %d" % cap
                 buckets["%s (cap: %d)" % (label, cap)].append((name, team))
                 placed = True

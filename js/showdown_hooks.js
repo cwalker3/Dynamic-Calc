@@ -827,9 +827,13 @@ function deriveTrainerOrder(sets) {
             var match = setName.trim().match(/^Lvl\s+(\d+)\s+(.*)$/)
             if (!match) continue
 
+            // rank on the ace rather than the lowest level: teams carry the odd
+            // placeholder slot (three teams here hold a level 0 mon, and several
+            // late game trainers have a level 5 one), which drags them to the
+            // front of the game if you sort on the minimum
             var name = match[2].trim()
-            if (!trainers[name]) trainers[name] = { level: Infinity, entries: [] }
-            trainers[name].level = Math.min(trainers[name].level, parseInt(match[1]))
+            if (!trainers[name]) trainers[name] = { level: 0, entries: [] }
+            trainers[name].level = Math.max(trainers[name].level, parseInt(match[1]))
             trainers[name].entries.push(sets[species][setName])
         }
     }
