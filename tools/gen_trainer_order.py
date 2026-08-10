@@ -28,6 +28,10 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEST = os.path.join(REPO, "js", "data", "trainer_order.js")
 
 
+def has_moves(entry):
+    return any(m for m in (entry.get("moves") or []))
+
+
 def calc_trainers(key):
     """trainer name -> ace level, from the calc's own set data."""
     with open(os.path.join(REPO, "backups", "%s.js" % key), encoding="utf-8") as f:
@@ -35,12 +39,17 @@ def calc_trainers(key):
     data = json.loads(raw[raw.index("{"):].rstrip().rstrip(";"))
 
     levels = collections.defaultdict(list)
+    playable = set()
     for sets in data["formatted_sets"].values():
-        for set_name in sets:
+        for set_name, entry in sets.items():
             m = re.match(r"^Lvl\s+(\d+)\s+(.*)$", set_name.strip())
-            if m:
-                levels[m.group(2).strip()].append(int(m.group(1)))
-    return {name: max(lv) for name, lv in levels.items()}
+            if not m:
+                continue
+            name = m.group(2).strip()
+            levels[name].append(int(m.group(1)))
+            if has_moves(entry):
+                playable.add(name)
+    return {name: max(lv) for name, lv in levels.items()}, playable
 
 
 # the doc site spells a few things differently to the calc's set data
@@ -132,7 +141,7 @@ def doc_order(areas_path, trainers):
 
 
 def build(key, title, areas_path):
-    trainers = calc_trainers(key)
+    trainers, playable = calc_trainers(key)
     ordered = doc_order(areas_path, trainers)
     placed = set(ordered)
 
@@ -155,6 +164,9 @@ def build(key, title, areas_path):
         final.append(name)
     final.extend(leftovers.get(len(ordered), []))
 
+    # unused rom slots (every set moveless) go last, matching deriveTrainerOrder
+    final = [n for n in final if n in playable] + [n for n in final if n not in playable]
+
     orders = {}
     if os.path.exists(DEST):
         with open(DEST, encoding="utf-8") as f:
@@ -174,6 +186,7 @@ def build(key, title, areas_path):
     print("calc trainers: %d" % len(trainers))
     print("placed from areas.json: %d" % len(ordered))
     print("slotted by ace level: %d" % (len(final) - len(ordered)))
+    print("unused rom slots pushed to the end: %d" % (len(trainers) - len(playable)))
     assert len(final) == len(trainers), "lost trainers: %d vs %d" % (len(final), len(trainers))
     assert len(set(final)) == len(final), "duplicate trainers in order"
     print("wrote %s (%d trainers for %s)" % (DEST, len(final), title))

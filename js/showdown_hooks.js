@@ -861,12 +861,33 @@ function deriveTrainerOrder(sets) {
         })
     }
 
+    // Unused rom slots come through as trainers whose every set has no moves at
+    // all (131 of them here, level 5 Zigzagoon with zeroed IVs). Keep them so
+    // ids stay contiguous with the mastersheet, but push them past the real
+    // trainers and leave them out of the next/prev chain.
+    function hasMoves(name) {
+        var entries = trainers[name].entries
+        for (var e = 0; e < entries.length; e++) {
+            var moves = entries[e]["moves"] || []
+            for (var m = 0; m < moves.length; m++) {
+                if (moves[m]) return true
+            }
+        }
+        return false
+    }
+
+    var real = [], empty = []
+    for (var o = 0; o < ordered.length; o++) {
+        (hasMoves(ordered[o]) ? real : empty).push(ordered[o])
+    }
+    ordered = real.concat(empty)
+
     for (var i = 0; i < ordered.length; i++) {
         var entries = trainers[ordered[i]].entries
         for (var j = 0; j < entries.length; j++) {
             entries[j]["tr_id"] = i
-            if (i > 0) entries[j]["prev"] = i - 1
-            if (i < ordered.length - 1) entries[j]["next"] = i + 1
+            if (i > 0 && i < real.length) entries[j]["prev"] = i - 1
+            if (i < real.length - 1) entries[j]["next"] = i + 1
         }
     }
     return ordered

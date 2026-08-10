@@ -107,6 +107,10 @@ def esc(value):
     return html.escape(str(value), quote=True)
 
 
+def has_moves(entry):
+    return any(m for m in (entry.get("moves") or []))
+
+
 def group_trainers(data):
     """formatted_sets is keyed species -> "Lvl N Trainer" -> set. Invert it."""
     trainers = collections.defaultdict(list)
@@ -124,7 +128,12 @@ def group_trainers(data):
             })
     for team in trainers.values():
         team.sort(key=lambda p: (p["sub_index"], p["level"]))
-    return trainers
+
+    # Unused rom slots: every set moveless, level 5 Zigzagoon with zeroed IVs.
+    # deriveTrainerOrder sorts these past the real trainers so ids stay lined
+    # up, and there is nothing to show for them here.
+    return {name: team for name, team in trainers.items()
+            if any(has_moves(p["entry"]) for p in team)}
 
 
 def render_mon(mon, data, move_ids):
