@@ -43,11 +43,39 @@ def calc_trainers(key):
     return {name: max(lv) for name, lv in levels.items()}
 
 
+# the doc site spells a few things differently to the calc's set data
+SPELLINGS = [
+    ("PKMN ", "Pokémon "),
+    ("Manaic", "Maniac"),
+    ("Picknicker", "Picnicker"),
+    (" and ", " & "),
+]
+
+
 def normalise(name):
-    name = name.replace("PKMN Trainer", "Pokémon Trainer")
-    name = re.sub(r"\s*\[[^\]]*\]\s*$", "", name)   # drop "[Cynthia]" style notes
-    name = name.replace("Manaic", "Maniac")          # typo in the doc source
+    for wrong, right in SPELLINGS:
+        name = name.replace(wrong, right)
     return re.sub(r"\s+", " ", name).strip().lower()
+
+
+def exact_key(name):
+    """The name with any "[Diantha]" style note stripped."""
+    return normalise(re.sub(r"\s*\[[^\]]*\]\s*$", "", name))
+
+
+def alias_keys(name):
+    """Disguised trainers are written "Leader Carnation [Roxanne]". The bracket
+    names who they actually are, which is how the calc lists them."""
+    m = re.match(r"^(.*?)\s*\[([^\]]+)\]\s*$", normalise(name))
+    if not m:
+        return []
+
+    stripped, alias = m.group(1).strip(), m.group(2).strip()
+    keys = [alias]
+    parts = stripped.rsplit(" ", 1)
+    if len(parts) == 2:
+        keys.insert(0, parts[0] + " " + alias)   # keep the trainer class
+    return keys
 
 
 def doc_order(areas_path, trainers):
@@ -59,15 +87,48 @@ def doc_order(areas_path, trainers):
     for name in trainers:
         by_norm[normalise(name)].append(name)
 
-    seen, ordered = set(), []
-    for area in areas:
-        for roster in (area.get("rosters") or []):
-            for trainer in (roster.get("trainers") or []):
-                key = normalise(trainer.get("name") or "")
-                if key in by_norm and key not in seen:
-                    seen.add(key)
-                    ordered.extend(sorted(by_norm[key]))
-    return ordered
+    entries = [trainer.get("name") or ""
+               for area in areas
+               for roster in (area.get("rosters") or [])
+               for trainer in (roster.get("trainers") or [])]
+
+    placed, ordered = set(), []
+
+    def place(key):
+        if key not in by_norm:
+            return False
+        names = [n for n in by_norm[key] if n not in placed]
+        if not names:
+            return False
+        placed.update(names)
+        ordered.append((key, sorted(names)))
+        return True
+
+    # Exact names first, across the whole game, before any alias is considered.
+    # The rematch facility fields disguised gym leaders ("Leader Antonin
+    # [Norman]"), and letting that alias land first would drag Norman's gym
+    # battle to wherever the facility appears.
+    for name in entries:
+        place(exact_key(name))
+
+    # second pass fills the gaps, keeping doc order among what is left
+    resolved = {}
+    for i, name in enumerate(entries):
+        for key in alias_keys(name):
+            if key in by_norm and key not in resolved and place(key):
+                resolved[key] = i
+                break
+
+    # first occurrence wins: gym leaders show up again in the rematch facility
+    # late in the file, and taking the last position would sort them to the end
+    order_of = {}
+    for i, name in enumerate(entries):
+        for key in [exact_key(name)] + alias_keys(name):
+            order_of.setdefault(key, i)
+
+    ordered.sort(key=lambda kv: order_of.get(kv[0], len(entries)))
+
+    return [name for _, names in ordered for name in names]
 
 
 def build(key, title, areas_path):

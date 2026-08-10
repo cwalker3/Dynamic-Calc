@@ -1,7 +1,9 @@
 """Generates a trainers mastersheet page from a calc's backup data.
 
-    python3 tools/gen_mastersheet.py <backup-key> "<title>"
-    python3 tools/gen_mastersheet.py rrss "Rising Ruby/Sinking Saphire"
+    python3 tools/gen_mastersheet.py <backup-key> "<title>" [areas.json]
+    python3 tools/gen_mastersheet.py rrss "Rising Ruby/Sinking Saphire" areas.json
+
+Pass the documentation site's areas.json to get an encounters section too.
 
 Writes <backup-key>_mastersheet.html next to index.html.
 
@@ -14,8 +16,8 @@ The page is index.html plus a #content-container holding the sidebar and the
 trainer document. Tab toggles between the two, which is what showdown_hooks.js
 already does when the url contains "mastersheet".
 
-Encounters are deliberately absent: the gen 6 backups carry no wild data, and a
-half-populated encounters tab would be worse than none.
+Encounters come from that areas.json, since the gen 6 backups carry no wild
+data of their own. Without it the page is trainers only.
 """
 import collections
 import html
@@ -168,6 +170,103 @@ def render_trainer(index, name, team, data, move_ids):
 """ % (index, sprite(lead), esc(name), mons)
 
 
+# Order the encounter tables are emitted in. getEncInfo in mastersheet.js keys
+# its repel/dupe maths off a fixed list per generation, so the page overrides it
+# with this one instead of pretending these are gen 4/5 slots.
+ENCOUNTER_METHODS = ["Grass", "Tall Grass", "Walking", "Horde", "DexNav",
+                     "Surfing", "Surf", "Old Rod", "Good Rod", "Super Rod",
+                     "Rock Smash", "Birds"]
+
+# "Every area with grass/walking/sand etc has at least 10 wild Pokemon, each
+# having a 10% chance... Some areas have 11, in which case two appear at 5%.
+# These are shown with an asterisk" - the doc site's own meta blurb. The rare
+# flag is that asterisk, so the rates are derivable rather than missing.
+FLAT_RATE_METHODS = {"Grass", "Tall Grass", "Walking"}
+
+
+def read_areas(areas_path):
+    if not areas_path or not os.path.exists(areas_path):
+        return []
+    with open(areas_path, encoding="utf-8") as f:
+        return json.load(f)["areas"]
+
+
+def encounter_rate(method, species, count):
+    if method not in FLAT_RATE_METHODS or count < 10:
+        return ""
+    return "5" if species.get("rare") else "10"
+
+
+def render_encounters(areas, data):
+    """One card per area, each holding a table per encounter method."""
+    if not areas:
+        return ""
+
+    blocks = []
+    index = 0
+    for area in areas:
+        wild = area.get("wild") or []
+        if not wild:
+            continue
+
+        by_method = collections.OrderedDict()
+        for method in ENCOUNTER_METHODS:
+            rows = [w for w in wild if w.get("method") == method]
+            if rows:
+                by_method[method] = rows
+        for w in wild:                      # anything not in the known list
+            method = w.get("method") or "Other"
+            if method not in by_method:
+                by_method[method] = [x for x in wild
+                                     if (x.get("method") or "Other") == method]
+
+        seen, icons = set(), []
+        tables = []
+        for method, rows in by_method.items():
+            entries = []
+            for row in rows:
+                species = row.get("species")
+                species = species if isinstance(species, list) else [species]
+                for sp in species:
+                    if not sp:
+                        continue
+                    name = sp.get("name") or ""
+                    dex_id = data["poks"].get(name, {}).get("id", 0)
+                    entries.append(
+                        '<div class="expanded-field">'
+                        '<div class="enc-name" data-species-id="%s" data-species-name="%s">%s</div>'
+                        '<div class="enc-lvl">%s</div>'
+                        '<div class="enc-percent">%s</div></div>'
+                        % (dex_id, esc(name), esc(name), esc(row.get("level", "")),
+                           encounter_rate(method, sp, len(species))))
+                    if name not in seen:
+                        seen.add(name)
+                        icons.append('<div class="wild" data-species-name="%s">'
+                                     '<img src="%s" loading="lazy"></div>'
+                                     % (esc(name), sprite(name)))
+            tables.append('<div class="expanded-left"><div class="field-header expanded-field">'
+                          '<div class="enc-name">%s</div></div>%s</div>'
+                          % (esc(method), "".join(entries)))
+
+        blocks.append("""  <div class="expanded-field filterable doc-enc" data-index="%d">
+    <div class="expanded-field-main">
+      <div class="encounter-locations">%s</div>
+      <div class="encounter-wilds">%s</div>
+    </div>
+    <div class="expanded-card-content expanded-docs">%s</div>
+  </div>
+""" % (index, esc(area["name"]), "".join(icons), "".join(tables)))
+        index += 1
+
+    override = ("<script>\n"
+                "// mastersheet.js picks encounter sections by generation. These are this\n"
+                "// game's methods, in the order the tables are emitted above.\n"
+                "getEncInfo = function (enc) { return parseEncTable(enc, %s) }\n"
+                "</script>" % json.dumps([[m] for m in ENCOUNTER_METHODS]))
+
+    return override + "\n<h1>Encounters</h1>\n" + "\n".join(blocks)
+
+
 def render_document(title, trainers, data, move_ids, splits):
     section_titles, caps = splits
     # must match deriveTrainerOrder in js/showdown_hooks.js exactly: the calc
@@ -213,7 +312,7 @@ def render_document(title, trainers, data, move_ids, splits):
     return "\n".join(out)
 
 
-def render_species_panels(data):
+def render_species_panels(data, move_ids):
     panels = []
     for name, pok in sorted(data["poks"].items(), key=lambda kv: kv[1].get("id", 0)):
         dex_id = pok.get("id", 0)
@@ -252,7 +351,8 @@ def render_species_panels(data):
         if learnset:
             rows = "".join(
                 '<div class="expanded-field"><div class="enc-lvl">%s</div>'
-                '<div class="enc-name">%s</div></div>' % (esc(lv), esc(mv))
+                '<div class="doc-move" data-id="%d">%s</div></div>'
+                % (esc(lv), move_ids.get(mv, 0), esc(mv))
                 for lv, mv in learnset)
             panels.append(
                 '<div class="expanded-card-content expanded-learnset ms-pok" '
@@ -277,11 +377,12 @@ def render_move_panels(data, move_ids):
     return "\n".join(panels)
 
 
-def build(key, title):
+def build(key, title, areas_path=None):
     data = read_backup(key)
     move_ids = read_move_ids()
     splits = read_splits(title)
     trainers = group_trainers(data)
+    areas = read_areas(areas_path)
 
     with open(os.path.join(REPO, "index.html"), encoding="utf-8") as f:
         shell = f.read()
@@ -312,8 +413,9 @@ def build(key, title):
 </div>
 """ % (json.dumps(autofills, ensure_ascii=False),
        render_move_panels(data, move_ids),
-       render_species_panels(data),
-       render_document(title, trainers, data, move_ids, splits))
+       render_species_panels(data, move_ids),
+       render_document(title, trainers, data, move_ids, splits)
+       + render_encounters(areas, data))
 
     shell = shell.replace("</body>", content + "</body>", 1)
 
@@ -324,6 +426,7 @@ def build(key, title):
     print("trainers: %d" % len(trainers))
     print("species panels: %d" % len(data["poks"]))
     print("move panels: %d" % len(data["moves"]))
+    print("encounter areas: %d" % sum(1 for a in areas if a.get("wild")))
     print("sections: %s" % ", ".join(t for t in splits[0]) if splits[0] else "(no splits found)")
     print("wrote %s (%.1f MB)" % (dest, os.path.getsize(dest) / 1024 / 1024))
 
@@ -331,4 +434,4 @@ def build(key, title):
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         sys.exit(__doc__)
-    build(sys.argv[1], sys.argv[2])
+    build(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
