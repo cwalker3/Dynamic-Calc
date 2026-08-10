@@ -166,6 +166,14 @@ def render_mon(mon, data, move_ids):
        esc(item), esc(nature), esc(ability), "\n".join("        " + m for m in moves))
 
 
+def display_name(name):
+    """The exporter appends an index when a trainer name repeats: 38 Team Aqua
+    Grunts become "Team Aqua Grunt", "Team Aqua Grunt2" and so on. Space it out
+    so it reads as an enumeration instead of a mangled name. Identity and order
+    still use the raw name."""
+    return re.sub(r"(\D)(\d+)$", r"\1 #\2", name)
+
+
 def render_trainer(index, name, team, data, move_ids):
     lead = team[0]["species"] if team else ""
     mons = "".join(render_mon(m, data, move_ids) for m in team)
@@ -176,7 +184,7 @@ def render_trainer(index, name, team, data, move_ids):
     <div class="expanded-card-content expanded-docs">
 %s    </div>
   </div>
-""" % (index, sprite(lead), esc(name), mons)
+""" % (index, sprite(lead), esc(display_name(name)), mons)
 
 
 # Order the encounter tables are emitted in. getEncInfo in mastersheet.js keys
@@ -311,14 +319,17 @@ def render_document(title, trainers, data, move_ids, splits):
             buckets["Post Game"].append((name, team))
 
     out = ['<div class="pokemon-list spreadsheet" id="mastersheet">', "<h1>%s</h1>" % esc(title)]
-    for label, group in buckets.items():
+    sections = []
+    for n, (label, group) in enumerate(buckets.items()):
         if not group:
             continue
-        out.append("<h1>%s</h1>" % esc(label))
+        anchor = "sec-%d" % n
+        sections.append((anchor, label))
+        out.append('<h1 id="%s">%s</h1>' % (anchor, esc(label)))
         for name, team in group:
             out.append(render_trainer(tr_ids[name], name, team, data, move_ids))
     out.append("</div>")
-    return "\n".join(out)
+    return "\n".join(out), sections
 
 
 def render_species_panels(data, move_ids):
@@ -409,7 +420,43 @@ def build(key, title, areas_path=None):
                                             key=lambda kv: move_ids.get(kv[0], 0))],
     }
 
+    document_html, sections = render_document(title, trainers, data, move_ids, splits)
+    if areas:
+        sections = sections + [("sec-enc", "Encounters")]
+
+    jump = "".join(
+        '<a href="#%s" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;'
+        'border:1px solid #333;border-radius:3px;font-size:12px">%s</a>'
+        % (anchor, esc(label.split(" (")[0])) for anchor, label in sections)
+
+    controls = """
+<div id="ms-controls" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#111;
+     border-bottom:1px solid #333;padding:6px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+  <button id="ms-toggle" type="button"
+     style="background:#2b2b2b;color:#eee;border:1px solid #444;border-radius:3px;padding:4px 10px;cursor:pointer">
+    Calculator</button>
+  <span style="color:#666;font-size:12px">Tab</span>
+  %s
+</div>
+<script>
+$(function () {
+    // the sheet is what this page is for, so start there and give the calc a
+    // button rather than leaving Tab as the only way back
+    $('.wrapper').hide()
+    $('#content-container').show()
+    $('body').css('padding-top', '40px')
+
+    $('#ms-toggle').on('click', function () {
+        $('.wrapper').toggle()
+        $('#content-container').toggle()
+        $(this).text($('#content-container').is(':visible') ? 'Calculator' : 'Mastersheet')
+    })
+})
+</script>
+""" % jump
+
     content = """
+%s
 <div id="content-container">
   <script>autofills = %s;</script>
   <div class="pokemon-filter master-sidebar" style="top: 0px">
@@ -420,11 +467,10 @@ def build(key, title, areas_path=None):
   </div>
 %s
 </div>
-""" % (json.dumps(autofills, ensure_ascii=False),
+""" % (controls, json.dumps(autofills, ensure_ascii=False),
        render_move_panels(data, move_ids),
        render_species_panels(data, move_ids),
-       render_document(title, trainers, data, move_ids, splits)
-       + render_encounters(areas, data))
+       document_html + render_encounters(areas, data))
 
     shell = shell.replace("</body>", content + "</body>", 1)
 
