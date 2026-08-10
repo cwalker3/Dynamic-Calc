@@ -63,6 +63,17 @@ g6Party = []            // { offset, dec, species, growth }
 g6BoxMons = {}          // display name -> { offset, dec, species, growth }
 g6File = null           // retained File, re-read by the sync button
 g6FileHandle = null     // FileSystemFileHandle when the browser supports it
+g6DirHandle = null      // save folder, granted once so writes can go back in place
+g6SaveFileHandle = null // the save file inside g6DirHandle
+g6Dirty = false         // true once edits exist that are not on disk yet
+g6LastModified = 0      // mtime of the file as last read, drives auto sync
+g6AutoSyncTimer = null
+g6BackupDirHandle = null // folder auto backups are dropped into, when enabled
+
+G6_AUTO_SYNC_MS = 3000
+// distinctive enough that pruning can never touch a file the calc did not write
+G6_BACKUP_PREFIX = "dyncalc-main-"
+G6_BACKUP_KEEP = 30
 
 // ----------------------------------------------------------------- binary ---
 
@@ -263,6 +274,8 @@ function g6ParsePKM(bytes, offset, isParty) {
         ? `${nickname} (${name})`
         : `${name}`
 
+    // marks the mon for the player party preview, which the import reads back
+    if (isParty) text += ` |Party`
     if (item) text += ` @ ${item}`
 
     text += "\n"
@@ -280,12 +293,16 @@ function g6ParsePKM(bytes, offset, isParty) {
     return text
 }
 
-function g6ReadSave(buffer, fileName) {
+// quiet is set when polling, where a half written file is expected rather than
+// something worth interrupting the user about
+function g6ReadSave(buffer, fileName, quiet) {
     const data = new Uint8Array(buffer)
     const detected = g6DetectLayout(data)
 
     if (!detected) {
-        alert("That does not look like a gen 6 save. Upload the `main` file from your 3DS/Citra save folder.")
+        if (!quiet) {
+            alert("That does not look like a gen 6 save. Upload the `main` file from your 3DS/Citra save folder.")
+        }
         return false
     }
 
@@ -293,6 +310,7 @@ function g6ReadSave(buffer, fileName) {
     g6Layout = detected.layout
     g6Base = detected.base
     g6Save = true
+    g6Dirty = false
     saveUploaded = true
     saveFileName = fileName
     savExt = ""
@@ -428,14 +446,19 @@ function g6UpdateBattleStats(entry, speciesName, level, batch) {
     g6WriteU32(dec, 0xE8, g6StatusValue($('#statusL1').val()))
 }
 
+// gen 5 onwards stores a plain status enum, not the gen 1-4 bitfield
+// (PKHeX StatusType), so writing 1 here is paralysis and not a 1 turn sleep
+G6_STATUS = {
+    "Paralyzed": 1,
+    "Asleep": 2,
+    "Frozen": 3,
+    "Burned": 4,
+    "Poisoned": 5,
+    "Badly Poisoned": 6
+}
+
 function g6StatusValue(status) {
-    if (status == "Asleep") return 1
-    if (status == "Poisoned") return 1 << 3
-    if (status == "Burned") return 1 << 4
-    if (status == "Frozen") return 1 << 5
-    if (status == "Paralyzed") return 1 << 6
-    if (status == "Badly Poisoned") return 1 << 7
-    return 0
+    return G6_STATUS[status] || 0
 }
 
 function g6WriteEntry(entry) {
@@ -470,7 +493,7 @@ function g6UpdatePartyPKMN(edge, speciesNameOverride) {
     $('#changelog').html(changelog)
 
     g6SetBlockChecksum(g6Layout.party)
-    addSaveBtn()
+    g6AddSaveButtons()
 }
 
 function g6UpdateBoxPKMN(edge, speciesNameOverride) {
@@ -491,7 +514,7 @@ function g6UpdateBoxPKMN(edge, speciesNameOverride) {
     $('#changelog').html(changelog)
 
     g6SetBlockChecksum(g6Layout.box)
-    addSaveBtn()
+    g6AddSaveButtons()
 }
 
 function g6EdgeSelected() {
@@ -525,22 +548,98 @@ function g6EdgeSelected() {
 
     g6SetBlockChecksum(g6Layout.party)
     g6SetBlockChecksum(g6Layout.box)
-    addSaveBtn()
+    g6AddSaveButtons()
 
     $('#changelog').html(changelog)
 }
 
+// Not reachable from the alt+B hotkey, which is gen 4 only. The status field
+// stores the type and nothing else: gen 6 sleep turns carry across switches
+// within a battle but are re-rolled between battles, so the counter is battle
+// state rather than save data and no written value can force a wake on turn 1.
 function g6Bedtime() {
     for (let i = 0; i < g6Party.length; i++) {
-        g6WriteU32(g6Party[i].dec, 0xE8, 1)
+        g6WriteU32(g6Party[i].dec, 0xE8, G6_STATUS["Asleep"])
         g6WriteEntry(g6Party[i])
     }
 
-    changelog += `<p>Party set to 1 turn sleep</p>`
+    changelog += `<p>Party set to sleep</p>`
     $('#changelog').html(changelog)
 
     g6SetBlockChecksum(g6Layout.party)
-    addSaveBtn()
+    g6AddSaveButtons()
+}
+
+// ------------------------------------------------------- writing in place ---
+
+function g6IsSaveSize(size) {
+    for (const name in G6_LAYOUTS) {
+        if (size == G6_LAYOUTS[name].size) return true
+    }
+    return false
+}
+
+// Asks once for the folder holding the save, which is what lets the calc write
+// the backup next to it. A file handle on its own cannot reach its own folder.
+async function g6LinkSaveFolder() {
+    const dir = await window.showDirectoryPicker({ id: 'dynamic-calc-3ds-save', mode: 'readwrite' })
+    let handle = null
+
+    try {
+        handle = await dir.getFileHandle("main")
+    } catch (error) {
+        // some dumping tools name it something else, fall back to size
+        for await (const entry of dir.values()) {
+            if (entry.kind != "file") continue
+            const file = await entry.getFile()
+            if (g6IsSaveSize(file.size)) {
+                handle = entry
+                break
+            }
+        }
+    }
+
+    if (!handle) throw new Error("no gen 6 save file found in that folder")
+
+    g6DirHandle = dir
+    g6SaveFileHandle = handle
+    return handle
+}
+
+async function g6WriteFile(handle, data) {
+    const writable = await handle.createWritable()
+    await writable.write(data)
+    await writable.close()
+}
+
+// Backs up whatever is currently on disk, then overwrites it with the edits.
+async function g6WriteToSaveFolder() {
+    try {
+        if (!g6SaveFileHandle) await g6LinkSaveFolder()
+
+        const current = await g6SaveFileHandle.getFile()
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+        const backupName = `${current.name}.bak-${stamp}`
+
+        if (!confirm(`Back up ${current.name} as ${backupName}, then write the edited save over ${current.name}?`)) {
+            return
+        }
+
+        await g6WriteFile(await g6DirHandle.getFileHandle(backupName, { create: true }),
+            await current.arrayBuffer())
+        await g6WriteFile(g6SaveFileHandle, view)
+
+        // our own write must not read back as a change worth syncing
+        g6Dirty = false
+        g6LastModified = (await g6SaveFileHandle.getFile()).lastModified
+
+        changelog += `<p>Wrote ${current.name}, previous save kept as ${backupName}</p>`
+        $('#changelog').html(changelog)
+    } catch (error) {
+        if (error && error.name == 'AbortError') return
+        console.error(error)
+        alert(`Could not write to the save folder: ${error && error.message}`)
+    }
 }
 
 function g6DownloadSave() {
@@ -564,6 +663,7 @@ function g6LoadFile(file) {
     const reader = new FileReader()
     reader.onload = function (e) {
         try {
+            g6LastModified = file.lastModified
             g6ReadSave(e.target.result, file.name)
         } catch (error) {
             console.error(error)
@@ -577,7 +677,8 @@ function g6LoadFile(file) {
 // A picked file handle can always be re-read, a plain upload only sometimes can.
 async function g6SyncSave() {
     try {
-        const file = g6FileHandle ? await g6FileHandle.getFile() : g6File
+        const handle = g6SaveFileHandle || g6FileHandle
+        const file = handle ? await handle.getFile() : g6File
         if (!file) {
             alert("Load a save first.")
             return
@@ -586,6 +687,8 @@ async function g6SyncSave() {
         const buffer = await file.arrayBuffer()
         if (!g6ReadSave(buffer, file.name)) return
 
+        g6LastModified = file.lastModified
+        await g6BackupSave()
         $('#import').click()
         $('#sync-sav').text("Synced!")
         setTimeout(function () { $('#sync-sav').text("Sync Save") }, 1000)
@@ -595,9 +698,159 @@ async function g6SyncSave() {
     }
 }
 
+// ---------------------------------------------------------------- watching ---
+
+// Polls the picked file so saving in game pulls itself into the calc. Only a
+// handle works here: a File from an upload is a frozen snapshot whose
+// lastModified never changes no matter what happens on disk.
+function g6CanAutoSync() {
+    return !!(g6SaveFileHandle || g6FileHandle)
+}
+
+function g6StartAutoSync() {
+    g6StopAutoSync()
+    if (!g6CanAutoSync()) return
+    g6AutoSyncTimer = setInterval(g6PollSave, G6_AUTO_SYNC_MS)
+}
+
+function g6StopAutoSync() {
+    if (g6AutoSyncTimer) clearInterval(g6AutoSyncTimer)
+    g6AutoSyncTimer = null
+}
+
+function g6ToggleAutoSync() {
+    if (g6AutoSyncTimer) {
+        g6StopAutoSync()
+        $('#auto-sync').text("Auto Sync: Off")
+    } else {
+        g6StartAutoSync()
+        $('#auto-sync').text("Auto Sync: On")
+    }
+}
+
+async function g6PollSave() {
+    const handle = g6SaveFileHandle || g6FileHandle
+    if (!handle) return
+
+    let file
+    try {
+        file = await handle.getFile()
+    } catch (error) {
+        // usually the permission lapsed, stop rather than spin on it
+        console.error(error)
+        g6StopAutoSync()
+        $('#auto-sync').text("Auto Sync: Off")
+        changelog += `<p>Auto sync stopped, re-pick the save to resume</p>`
+        $('#changelog').html(changelog)
+        return
+    }
+
+    if (!g6LastModified) g6LastModified = file.lastModified
+    if (file.lastModified == g6LastModified) return
+
+    // edits that have not been written out would be thrown away by a re-read
+    if (g6Dirty) {
+        g6StopAutoSync()
+        $('#auto-sync').text("Auto Sync: Off")
+        changelog += `<p>Save changed on disk, auto sync paused so your unsaved edits are not lost</p>`
+        $('#changelog').html(changelog)
+        return
+    }
+
+    // the game may be mid-write, leave lastModified alone so a bad read retries
+    const buffer = await file.arrayBuffer()
+    if (!g6ReadSave(buffer, file.name, true)) return
+
+    g6LastModified = file.lastModified
+    await g6BackupSave()
+    $('#import').click()
+}
+
+// ---------------------------------------------------------- auto backups ---
+
+function g6BackupName() {
+    return G6_BACKUP_PREFIX + new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+}
+
+// Snapshots the save exactly as it was just read off disk. Deliberately writes
+// to a folder of the user's choosing rather than the save folder: a 3DS save is
+// a filesystem image with a fixed file budget, and dropping backups into it on a
+// timer is not something to do to someone's run.
+async function g6BackupSave() {
+    if (!g6BackupDirHandle) return
+
+    try {
+        const name = g6BackupName()
+        await g6WriteFile(await g6BackupDirHandle.getFileHandle(name, { create: true }), view)
+        const pruned = await g6PruneBackups()
+
+        changelog += `<p>Backed up as ${name}${pruned ? `, removed ${pruned} old` : ""}</p>`
+        $('#changelog').html(changelog)
+    } catch (error) {
+        console.error(error)
+        g6BackupDirHandle = null
+        $('#auto-backup').text("Auto Backup: Off")
+        changelog += `<p>Auto backup stopped: ${error && error.message}</p>`
+        $('#changelog').html(changelog)
+    }
+}
+
+// Only ever removes files this calc wrote, oldest first. Timestamped names sort
+// chronologically, so plain lexicographic order is the right order.
+async function g6PruneBackups() {
+    const names = []
+    for await (const entry of g6BackupDirHandle.values()) {
+        if (entry.kind == "file" && entry.name.startsWith(G6_BACKUP_PREFIX)) names.push(entry.name)
+    }
+
+    names.sort()
+    let removed = 0
+    while (names.length > G6_BACKUP_KEEP) {
+        await g6BackupDirHandle.removeEntry(names.shift())
+        removed++
+    }
+    return removed
+}
+
+async function g6ToggleAutoBackup() {
+    if (g6BackupDirHandle) {
+        g6BackupDirHandle = null
+        $('#auto-backup').text("Auto Backup: Off")
+        return
+    }
+
+    try {
+        g6BackupDirHandle = await window.showDirectoryPicker({ id: 'dynamic-calc-3ds-backups', mode: 'readwrite' })
+        $('#auto-backup').text("Auto Backup: On")
+        await g6BackupSave() // take one straight away so the toggle visibly did something
+    } catch (error) {
+        g6BackupDirHandle = null
+        if (error && error.name == 'AbortError') return
+        console.error(error)
+        alert(`Could not use that folder for backups: ${error && error.message}`)
+    }
+}
+
 function g6AddSyncBtn() {
     if ($('#sync-sav').length > 0) return
     $('#read-save').after(`<button id="sync-sav" class="bs-btn bs-btn-default" onClick='g6SyncSave()'>Sync Save</button>`)
+
+    if (!g6CanAutoSync()) return
+    $('#sync-sav').after(`<button id="auto-sync" class="bs-btn bs-btn-default" onClick='g6ToggleAutoSync()'>Auto Sync: On</button>`)
+    g6StartAutoSync()
+
+    if (!window.showDirectoryPicker) return
+    $('#auto-sync').after(`<button id="auto-backup" class="bs-btn bs-btn-default" onClick='g6ToggleAutoBackup()'>Auto Backup: Off</button>`)
+}
+
+// addSaveBtn re-inserts the download button, so the write button is rebuilt with it
+function g6AddSaveButtons() {
+    g6Dirty = true
+    addSaveBtn()
+    $('#write-sav').remove()
+
+    if (!window.showDirectoryPicker) return
+    $('#download-sav').after(`<button id="write-sav" class="bs-btn bs-btn-default" onClick='g6WriteToSaveFolder()'>Write to Save</button>`)
 }
 
 // Called once the gen 6 constants have loaded. Prefers the file picker so that
@@ -610,26 +863,37 @@ function g6Init() {
     })
 
     if (!window.showOpenFilePicker) {
-        // without a handle the input has to be cleared or picking the same file
-        // a second time never fires a change event
-        $('#read-save').on('click', function () {
-            if ($('#save-upload-3ds').length) $('#save-upload-3ds')[0].value = null
-        })
+        g6UseUploadFallback()
         return
     }
 
     $('#read-save').on('click', async function (event) {
         event.preventDefault()
         try {
-            const handles = await window.showOpenFilePicker({
-                id: 'dynamic-calc-3ds-save',
-                types: [{ description: '3DS save', accept: { 'application/octet-stream': ['.sav', '.bin', '.dsv', ''] } }]
-            })
+            // no type filter: the file is named `main` with no extension at all,
+            // and an accept list would hide it from the picker entirely
+            const handles = await window.showOpenFilePicker({ id: 'dynamic-calc-3ds-save' })
+            if (!handles || !handles.length) return
+
             g6FileHandle = handles[0]
             g6File = await g6FileHandle.getFile()
             g6LoadFile(g6File)
         } catch (error) {
-            if (error && error.name != 'AbortError') console.error(error)
+            if (error && error.name == 'AbortError') return
+
+            // never leave the button looking dead, say what went wrong and let
+            // the plain upload take over from here
+            console.error(error)
+            alert(`Could not open the file picker: ${error && error.message}\n\nFalling back to a normal file upload.`)
+            g6UseUploadFallback()
         }
+    })
+}
+
+// Lets the label open the file input again. The input also has to be cleared on
+// every click or picking the same file twice never fires a change event.
+function g6UseUploadFallback() {
+    $('#read-save').off('click').attr('for', "save-upload-3ds").on('click', function () {
+        if ($('#save-upload-3ds').length) $('#save-upload-3ds')[0].value = null
     })
 }

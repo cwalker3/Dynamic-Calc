@@ -30,9 +30,15 @@ Gen 4/5 (Platinum, HG/SS, B/W, B2/W2) take a `.sav`, gen 3 takes an Emerald save
 <citra user dir>/sdmc/Nintendo 3DS/<id0>/<id1>/title/00040000/<title id>/data/00000001/main
 ```
 
-On Chrome/Edge the button opens a file picker and remembers the file, so after you save in game you can hit **Sync Save** to pull the new state in with one click. Other browsers fall back to a normal upload and Sync re-reads the same file where the browser allows it.
+On Chrome/Edge the button opens a file picker and remembers the file. **Auto Sync** then watches it and pulls your box and party in on its own every time you save in game, so the calc keeps up with your run without you touching it. **Sync Save** does the same on demand, and Auto Sync can be toggled off if you would rather it stayed still.
 
-Save editing (levels, EVs, items, abilities, natures, moves, party HP/status and batch edging) works the same way on gen 6 as it does on gen 4/5, and **Download .sav** gives you back a `main` with all checksums fixed. Close the game before copying it over the original.
+Auto Sync pauses itself if you have save edits that have not been written out yet, so a save in game can never quietly discard them. Other browsers fall back to a normal upload, where only the manual Sync button is available.
+
+Your in game party is filled into the player party preview automatically, in party order. You can still add or remove box mons by right clicking their sprite.
+
+Save editing (levels, EVs, items, abilities, natures, moves, party HP/status and batch edging) works the same way on gen 6 as it does on gen 4/5. **Download .sav** gives you back a `main` with all checksums fixed, to copy over the original yourself.
+
+On Chrome/Edge there is also a **Write to Save** button, which asks once for your save folder and from then on writes straight back into it, keeping the previous save as `main.bak-<timestamp>` next to it.
 
 ### Hotkeys for common actions
 

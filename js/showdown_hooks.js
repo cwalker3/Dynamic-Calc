@@ -574,6 +574,10 @@ function displayParty() {
     var destination = $('.player-party')
 
     if (currentParty.length > 0) {
+        // the save is the source of truth for the party, so re-importing or
+        // syncing replaces the preview instead of stacking another copy on it
+        destination.html("")
+
         $('.player-party').css('display', 'flex')
         $('#clear-party').css('display', 'inline-block')
 
@@ -584,8 +588,14 @@ function displayParty() {
         for (i in currentParty) {
             species_name = currentParty[i]
 
+            var set_data = setdex[species_name] && setdex[species_name]["My Box"]
+            if (!set_data) {
+                console.log(`no imported set for party member ${species_name}`)
+                continue
+            }
+            set_data['moves'] = padArray(set_data['moves'], 4, "-")
+
             var sprite_name = species_name.toLowerCase().replace(" ","-").replace(".","").replace("’","").replace(":","-").replace("*", "+")
-            var set_data = setdex[species_name]["My Box"]
             var data_id = species_name + " (My Box)"
 
 
@@ -1629,7 +1639,9 @@ $(document).ready(function() {
                 e.preventDefault()
                 $('.panel-mid').toggle()
                 $('.panel:not(.panel-mid)').toggleClass('third')
-            } else if ((e.altKey || e.metaKey) && (e.key == "b" || e.key == "∫") && saveUploaded && (baseGame == "Pt" || baseGame == "HGSS" || baseGame == "ORAS" || baseGame == "XY")) {
+            // gen 4 only: the 1 turn sleep this sets up relies on the remaining
+            // turn count living in the status bits, which gen 5+ does not store
+            } else if ((e.altKey || e.metaKey) && (e.key == "b" || e.key == "∫") && saveUploaded && (baseGame == "Pt" || baseGame == "HGSS")) {
                 e.preventDefault()
                 if (confirm("Put full party to sleep?")) {
                     bedtime()

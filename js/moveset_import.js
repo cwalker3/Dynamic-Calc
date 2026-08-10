@@ -847,12 +847,14 @@ function addSets(pokes, name) {
 	currentParty = []
 	for (var i = 0; i < rows.length; i++) {
 		var item = false
-		if (rows[i].split(" |Party")[1]) {
+		// save readers tag party members with " |Party", which may or may not be
+		// followed by an item, so match on the marker itself rather than what trails it
+		var isPartyMember = rows[i].includes(" |Party")
+		if (isPartyMember) {
 			if (rows[i].includes("@")) {
 				item = rows[i].split("@")[1].trim()
 			}
 			rows[i] = rows[i].split(" |Party")[0]
-			currentParty.push(rows[i])
 		}
 
 
@@ -889,6 +891,12 @@ function addSets(pokes, name) {
 				currentPoke = getStats(currentPoke, rows, i + 1);
 				currentPoke = getMoves(currentPoke, rows, i);
 				addToDex(currentPoke);
+
+				// sets are keyed by species, so the party has to record the resolved
+				// name rather than the raw line, which may carry a nickname
+				if (isPartyMember && !currentParty.includes(currentPoke.name)) {
+					currentParty.push(currentPoke.name)
+				}
 				addedpokes++;
 			}
 		}
