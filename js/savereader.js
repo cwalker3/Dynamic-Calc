@@ -1,12 +1,22 @@
 
+// the gen 3 and gen 6 readers take over by renaming the shared file input
+function otherSaveReaderActive() {
+    return $('#save-upload').length > 0 || $('#save-upload-3ds').length > 0
+}
+
+// gen 6 saves are handled by savereader_gen6.js, which is not loaded on every page
+function gen6SaveLoaded() {
+    return typeof g6Save !== "undefined" && g6Save
+}
+
 $('#read-save').click(function(){
-    if ($('#save-upload').length > 0) return;
+    if (otherSaveReaderActive()) return;
     $('#save-upload-g45')[0].value = null
 })
 
 
 document.getElementById('save-upload-g45').addEventListener('change', function(event, forceBlock2=false) {
-    if ($('#save-upload').length > 0) return;
+    if (otherSaveReaderActive()) return;
     const file = event.target.files[0];
     if (file) {
         const reader = new FileReader();
@@ -534,6 +544,8 @@ function getPKMNCheckSum(array) {
 }
 
 function updateBoxPKMN(edge=false) {
+    if (gen6SaveLoaded()) return g6UpdateBoxPKMN(edge)
+
     var selected = $('.set-selector')[0].value.split("(")[0].trim()
     var level = parseInt($('#levelL1').val())
  
@@ -656,6 +668,8 @@ function updatePKMNProps(decryptedData, expIndex, movesIndex) {
 // updates the selected party pokemon with the battle stats displayed on showdown calc, and edges exp to max
 // speciesNameOverride is set when this function is called from running the batch edge function, otherwise will be false
 function updatePartyPKMN(edge=false, speciesNameOverride=false) {
+    if (gen6SaveLoaded()) return g6UpdatePartyPKMN(edge, speciesNameOverride)
+
     var partyOffset = partyCountOffset + 4
     speciesName = speciesNameOverride || $('.set-selector')[0].value.split("(")[0].trim()
 
@@ -708,6 +722,8 @@ $('#edge').click(function() {
 })
 
 function edgeSelected(maxIVs=false) {
+    if (gen6SaveLoaded()) return g6EdgeSelected()
+
     var selected = getSelectedPoks()
 
     desiredLevel = parseInt(prompt("Edge selection to level: "))
@@ -806,6 +822,8 @@ function convert16BitWordsToUint8Array(words) {
 }
 
 function downloadSave() {
+    if (gen6SaveLoaded()) return g6DownloadSave()
+
     if (baseGame == "BW") {
         setBWChecksums()
     }
@@ -838,6 +856,8 @@ function getAllPoks() {
 }
 
 function bedtime() {
+    if (gen6SaveLoaded()) return g6Bedtime()
+
     for (let i=0;i<partyCount;i++) {
         var battleStat = decryptedBattleStats[i]
 

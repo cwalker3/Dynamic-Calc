@@ -21,6 +21,19 @@ On supported games next pokemon to be switched in will always be the left most p
 ### Automatic PKHex move import adjusting
 For all games in the romhack dropdown, pkhex imported movesets are autocorrected to the correct moves in game. 
 
+### Save importing (Gen 3-6)
+Calcs for supported base games show a save button next to the import box that reads your party and boxes straight out of a save file, no pkhex round trip needed.
+
+Gen 4/5 (Platinum, HG/SS, B/W, B2/W2) take a `.sav`, gen 3 takes an Emerald save, and gen 6 (X/Y, OR/AS) takes the raw `main` file out of a 3DS save folder. For Citra that lives at:
+
+```
+<citra user dir>/sdmc/Nintendo 3DS/<id0>/<id1>/title/00040000/<title id>/data/00000001/main
+```
+
+On Chrome/Edge the button opens a file picker and remembers the file, so after you save in game you can hit **Sync Save** to pull the new state in with one click. Other browsers fall back to a normal upload and Sync re-reads the same file where the browser allows it.
+
+Save editing (levels, EVs, items, abilities, natures, moves, party HP/status and batch edging) works the same way on gen 6 as it does on gen 4/5, and **Download .sav** gives you back a `main` with all checksums fixed. Close the game before copying it over the original.
+
 ### Hotkeys for common actions
 
 `f` - toggle "F"ield info

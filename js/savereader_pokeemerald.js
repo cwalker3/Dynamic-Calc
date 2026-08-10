@@ -1,5 +1,7 @@
 
 $('#read-save').click(function(){
+    // the input is only renamed to #save-upload for the gen 3 calcs
+    if ($('#save-upload').length == 0) return;
     $('#save-upload')[0].value = null
 })
 

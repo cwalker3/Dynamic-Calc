@@ -1210,6 +1210,12 @@ $(document).ready(function() {
     "0a37ed78da4e6078ed52": "Garbage Gold Deluxe"
     }
 
+    // 3DS calcs whose saves savereader_gen6.js can read, mapped to their base game
+    GEN_6_TITLES = {
+        "Rising Ruby/Sinking Saphire": "ORAS",
+        "Eternal X/Wilting Y Insanity Rebalanced": "XY"
+    }
+
     MASTERSHEETS = {
         "Blaze Black 2/Volt White 2 Redux 1.4": "bb2redux",
         "Sterling Silver 1.14": "sterlingsilver",
@@ -1236,16 +1242,34 @@ $(document).ready(function() {
             baseGame = "Pt"
         } else if (TITLE.includes("Silver") || TITLE.includes("Gold")) {
             baseGame = "HGSS"
+        } else if (GEN_6_TITLES[TITLE]) {
+            baseGame = GEN_6_TITLES[TITLE]
         }
 
         if (!baseGame) {
             $('#read-save').hide()
-        } else {
+        } else if (!GEN_6_TITLES[TITLE]) {
             $('.save-editor-guide').show()
         }
 
         $('.genSelection').hide()
         $('#rom-title').text(TITLE).show()
+
+        // 3DS games read the raw `main` file out of the save folder instead of a .sav
+        if (GEN_6_TITLES[TITLE]) {
+            $('#save-upload-g45').attr('id', "save-upload-3ds")
+            $('#read-save').attr('for', "save-upload-3ds").text("Read 3DS Save").hide()
+
+            checkAndLoadScript(`./js/save_constants/gen6.js`, {
+                onLoad: (src) => {
+                    console.log("Gen 6 Save Constants Loaded")
+                    $('#read-save').show()
+                    g6Init()
+                },
+                onNotFound: (src) => console.log(`Not found: ${src}`)
+            });
+        }
+
         if (TITLE == "Inclement Emerald" || TITLE == "Inclement Emerald No EVs") {
             
             $('#save-upload-g45').attr('id', "save-upload")
@@ -1605,7 +1629,7 @@ $(document).ready(function() {
                 e.preventDefault()
                 $('.panel-mid').toggle()
                 $('.panel:not(.panel-mid)').toggleClass('third')
-            } else if ((e.altKey || e.metaKey) && (e.key == "b" || e.key == "∫") && saveUploaded && (baseGame == "Pt" || baseGame == "HGSS")) {
+            } else if ((e.altKey || e.metaKey) && (e.key == "b" || e.key == "∫") && saveUploaded && (baseGame == "Pt" || baseGame == "HGSS" || baseGame == "ORAS" || baseGame == "XY")) {
                 e.preventDefault()
                 if (confirm("Put full party to sleep?")) {
                     bedtime()
