@@ -430,50 +430,65 @@ def build(key, title, areas_path=None):
         % (anchor, esc(label.split(" (")[0])) for anchor, label in sections)
 
     controls = r"""
-<div id="ms-controls" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#111;
-     border-bottom:1px solid #333;padding:6px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-  <a id="ms-calc-tab" href="#" style="background:#2b2b2b;color:#eee;border:1px solid #444;border-radius:3px;
-     padding:4px 12px;text-decoration:none;font-size:13px">Calculator</a>
-  <span style="background:#3a3a3a;color:#fff;border:1px solid #555;border-radius:3px;
-     padding:4px 12px;font-size:13px">Mastersheet</span>
-  <span style="width:10px"></span>
-  %s
+<div id="ms-controls">
+  <a class="ms-tab" data-view="calculator" href="?view=calculator">Calculator</a>
+  <a class="ms-tab active" data-view="mastersheet" href="?view=mastersheet">Mastersheet</a>
+  <span style="width:12px"></span>
+  <span id="ms-jump">%s</span>
 </div>
+<style>
+ #ms-controls { position:fixed; top:0; left:0; right:0; z-index:10000; background:#111;
+                border-bottom:1px solid #333; padding:6px 10px; display:flex; gap:6px;
+                align-items:center; flex-wrap:wrap }
+ .ms-tab { color:#bbb; background:#2b2b2b; border:1px solid #444; border-radius:3px;
+           padding:4px 12px; text-decoration:none; font-size:13px }
+ .ms-tab.active { color:#fff; background:#3a3a3a; border-color:#777 }
+ #ms-jump { display:flex; gap:6px; flex-wrap:wrap }
+ /* the sheet sits over the calculator rather than replacing it, so the
+    calculator is always laid out and never boots inside display:none */
+ #content-container { position:fixed; top:39px; left:0; right:0; bottom:0; z-index:9000;
+                      overflow-y:auto; overflow-x:hidden; background:#1b1b1b; padding:10px }
+</style>
 <script>
 (function () {
-    // The calculator is a separate page rather than a hidden half of this one.
-    // Initialising it inside display:none gives every element a zero width, so
-    // select2 and the sprite sizing come up wrong and it looks like it never
-    // loaded. Navigating means it always boots visible.
-    function calcUrl() {
-        return location.href.replace(/[^\/]*_mastersheet\.html/, 'index.html')
+    var open = true
+
+    function showSheet(on) {
+        open = on
+        $('#content-container').toggle(on)
+        $('#ms-jump').toggle(on)
+        $('.ms-tab').each(function () {
+            $(this).toggleClass('active', ($(this).attr('data-view') === 'mastersheet') === on)
+        })
     }
 
-    window.msGo = function (url) { location.href = url }
-
-    var tab = document.getElementById('ms-calc-tab')
-    if (tab) {
-        tab.href = calcUrl()
-        tab.addEventListener('click', function (e) { e.preventDefault(); window.msGo(calcUrl()) })
+    function setUrlView(view) {
+        if (!window.history || !history.replaceState) return
+        var search = location.search.replace(/([?&])view=[^&]*&?/, '$1').replace(/[?&]$/, '')
+        history.replaceState(null, '', location.pathname
+            + (search ? search + '&' : '?') + 'view=' + view + location.hash)
     }
 
-    // The built in .trainer-name handler loads the team and records it, but it
-    // is bound on ready and this runs at parse time, so read what it stored on
-    // the next tick rather than racing it.
-    $(document).on('click', '.trainer-name', function () {
-        setTimeout(function () {
-            // localStorage throws outright on a file:// origin, and losing the
-            // handoff is no reason not to open the calculator
-            try {
-                if (localStorage['right']) localStorage['msTrainer'] = localStorage['right']
-            } catch (e) { }
-            window.msGo(calcUrl())
-        }, 0)
+    $(document).on('click', '.ms-tab', function (e) {
+        e.preventDefault()
+        var view = $(this).attr('data-view')
+        showSheet(view === 'mastersheet')
+        setUrlView(view)
+        if (view === 'mastersheet') $('#content-container').scrollTop(0)
     })
 
-    // nothing on this page reveals the calculator, so keep it out of the way
-    document.body.style.paddingTop = '40px'
-    $('#calc-view').hide()
+    // a trainer click loads their team on the right, so drop the overlay to it
+    $(document).on('click', '.trainer-name', function () {
+        setTimeout(function () { showSheet(false); setUrlView('calculator') }, 0)
+    })
+
+    $(document).on('keydown', function (e) {
+        if ((e.keyCode || e.which) !== 9) return
+        setTimeout(function () { $('.wrapper').show(); showSheet(!open) }, 0)
+    })
+
+    var wanted = (location.search.match(/[?&]view=([^&]*)/) || [])[1]
+    showSheet(wanted !== 'calculator')
 })()
 </script>
 """ % jump
@@ -498,10 +513,7 @@ def build(key, title, areas_path=None):
     # index.html's .wrapper is only the results header, not the whole calc the
     # way it is on the Pokeweb exported sheets, so wrap the calc in something
     # that can actually be shown and hidden as a unit
-    body = re.search(r"<body[^>]*>", shell)
-    start, end = body.end(), shell.rindex("</body>")
-    shell = (shell[:start] + '\n<div id="calc-view">\n' + shell[start:end]
-             + "\n</div>\n" + content + shell[end:])
+    shell = shell.replace("</body>", content + "</body>", 1)
 
     dest = os.path.join(REPO, "%s_mastersheet.html" % key)
     with open(dest, "w", encoding="utf-8") as f:

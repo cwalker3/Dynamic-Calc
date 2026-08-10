@@ -708,7 +708,10 @@ $(".set-selector").change(function () {
 					$('#doubles-format').click()
 				}
 
-				let enemy_moves = SETDEX_BW[pokemonName][setName].moves
+				// some rom exports leave moves null on a set, and 191 of the RR/SS
+				// ones do. Selecting such a set used to throw here and take the
+				// rest of this handler down with it, leaving the calc dead.
+				let enemy_moves = SETDEX_BW[pokemonName][setName].moves || []
 
 				$('#filter-move').html(`<option value="All Moves">All Moves</option>`)
 				
