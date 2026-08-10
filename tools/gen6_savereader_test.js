@@ -114,6 +114,35 @@ check('currentParty holds only party mons, in save order',
     sandbox.currentParty.every(n => n in sandbox.g6PartyMons));
 check('the import text carries no leftover party marker', !text.includes('|Party'));
 
+// only the first few boxes are imported, the rest is storage
+const beyond = new Uint8Array(bytes.buffer.slice(0));
+const firstBox = beyond.subarray(sandbox.g6Base + sandbox.g6Layout.box.offset,
+    sandbox.g6Base + sandbox.g6Layout.box.offset + 0xE8);
+const planted = sandbox.g6Decrypt(firstBox);
+sandbox.g6WriteU16(planted, 0x08, 25); // Pikachu: not already in the fixture's boxes,
+                                       // so it cannot be deduplicated away and hide the result
+sandbox.g6WriteU16(planted, 0x06, sandbox.g6PKMChecksum(planted));
+const pastLimit = sandbox.g6Base + sandbox.g6Layout.box.offset
+    + (sandbox.G6_BOXES_IMPORTED * sandbox.G6_BOX_SIZE * 0xE8);
+beyond.set(sandbox.g6Encrypt(planted), pastLimit);
+
+const before = Object.keys(sandbox.g6BoxMons).length;
+sandbox.g6ReadSave(beyond.buffer.slice(0), 'main');
+check('a mon past the imported boxes is left out',
+    Object.keys(sandbox.g6BoxMons).length === before,
+    `${before} -> ${Object.keys(sandbox.g6BoxMons).length}`);
+
+// and that the same record IS picked up when it sits inside the range
+const within = new Uint8Array(bytes.buffer.slice(0));
+within.set(sandbox.g6Encrypt(planted),
+    sandbox.g6Base + sandbox.g6Layout.box.offset + ((sandbox.G6_BOX_SIZE + 1) * 0xE8));
+sandbox.g6ReadSave(within.buffer.slice(0), 'main');
+check('the same record inside the range is imported',
+    Object.keys(sandbox.g6BoxMons).length > before,
+    `${before} -> ${Object.keys(sandbox.g6BoxMons).length}`);
+
+sandbox.g6ReadSave(bytes.buffer.slice(0), 'main'); // restore state for later checks
+
 // gen 5+ stores a status enum, not the gen 1-4 bitfield
 check('Asleep writes the gen 5+ sleep enum value', sandbox.g6StatusValue('Asleep') === 2);
 check('Paralyzed writes the gen 5+ paralysis enum value', sandbox.g6StatusValue('Paralyzed') === 1);

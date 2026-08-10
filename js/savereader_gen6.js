@@ -8,7 +8,12 @@
 G6_SIZE_STORED = 0xE8
 G6_SIZE_PARTY = 0x104
 G6_SIZE_BLOCK = 56
-G6_BOX_SLOTS = 930 // 31 boxes * 30
+G6_BOX_SIZE = 30    // slots per box
+G6_BOX_COUNT = 31   // boxes a gen 6 save holds
+// Only the first few boxes are treated as the living box worth importing, so
+// the later ones can be used as storage without cluttering the calc. Raise this
+// to G6_BOX_COUNT to pull in everything.
+G6_BOXES_IMPORTED = 3
 G6_BEEF = 0x42454546
 
 G6_LAYOUTS = {
@@ -333,7 +338,8 @@ function g6ReadSave(buffer, fileName, quiet) {
     }
 
     const boxOffset = g6Base + g6Layout.box.offset
-    for (let i = 0; i < G6_BOX_SLOTS; i++) {
+    const boxSlots = Math.min(G6_BOXES_IMPORTED, G6_BOX_COUNT) * G6_BOX_SIZE
+    for (let i = 0; i < boxSlots; i++) {
         const offset = boxOffset + (i * G6_SIZE_STORED)
         showdownImport += g6ParsePKM(view.subarray(offset, offset + G6_SIZE_STORED), offset, false)
     }
@@ -341,7 +347,8 @@ function g6ReadSave(buffer, fileName, quiet) {
     $('.import-team-text').val(showdownImport)
 
     changelog = "<h4>Changelog:</h4>"
-    changelog += `<p>${fileName} loaded (${detected.name}, ${g6Party.length} in party)</p>`
+    changelog += `<p>${fileName} loaded (${detected.name}, ${g6Party.length} in party, `
+        + `boxes 1-${G6_BOXES_IMPORTED} of ${G6_BOX_COUNT})</p>`
 
     // otherwise the missing buttons just look like something is broken
     if (!window.showOpenFilePicker) {

@@ -1487,7 +1487,19 @@ $(document).ready(function() {
                     }
 
                 },
-                onNotFound: (src) => console.log(`Not found: ${src}`)
+                // the backup files are the largest asset the calc pulls, over a
+                // megabyte for some games. The default 10s cap silently gives up
+                // on a slow connection and leaves an empty calc with no clue why,
+                // because a late script.onload is ignored once the timeout wins.
+                timeout: 120000,
+                onError: (src, error) => {
+                    console.error(`Failed to load ${src}`, error)
+                    alert(`Could not load the data for ${TITLE} (${error && error.message}).\n\nCheck your connection and reload.`)
+                },
+                onNotFound: (src) => {
+                    console.log(`Not found: ${src}`)
+                    alert(`Could not find the data for ${TITLE}. Try reloading the page.`)
+                }
         });
         if (TITLE.includes("Photonic")) {
             $('.credits').prepend("Set data compiled by Questionable Specimen")
