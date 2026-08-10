@@ -1565,7 +1565,18 @@ $(document).ready(function() {
 
                             if (localStorage["right"]) {
                                 $(`[data-id='${localStorage["left"]}']`).click()
-                            }             
+                            }
+
+                            // a trainer picked on the mastersheet, which sends
+                            // you here rather than revealing a calculator that
+                            // was initialised while hidden
+                            if (localStorage["msTrainer"]) {
+                                var msSet = localStorage["msTrainer"]
+                                localStorage.removeItem("msTrainer")
+                                $('.opposing').val(msSet)
+                                $('.opposing .select2-chosen').text(msSet)
+                                $('.opposing').change()
+                            }
                         }, 20)
                     }
 

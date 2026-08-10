@@ -2005,59 +2005,48 @@
 
 <div id="ms-controls" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#111;
      border-bottom:1px solid #333;padding:6px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-  <button id="ms-toggle" type="button"
-     style="background:#2b2b2b;color:#eee;border:1px solid #444;border-radius:3px;padding:4px 10px;cursor:pointer">
-    Calculator</button>
-  <span style="color:#666;font-size:12px">Tab</span>
+  <a id="ms-calc-tab" href="#" style="background:#2b2b2b;color:#eee;border:1px solid #444;border-radius:3px;
+     padding:4px 12px;text-decoration:none;font-size:13px">Calculator</a>
+  <span style="background:#3a3a3a;color:#fff;border:1px solid #555;border-radius:3px;
+     padding:4px 12px;font-size:13px">Mastersheet</span>
+  <span style="width:10px"></span>
   <a href="#sec-0" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Roxanne</a><a href="#sec-1" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Brawly</a><a href="#sec-2" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Wattson</a><a href="#sec-3" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Flannery</a><a href="#sec-4" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Norman</a><a href="#sec-5" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Winona</a><a href="#sec-6" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Tate&amp;Liza</a><a href="#sec-7" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Wallace</a><a href="#sec-8" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Elite 4</a><a href="#sec-9" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Post Game</a><a href="#sec-enc" style="color:#8ab4f8;text-decoration:none;padding:2px 6px;border:1px solid #333;border-radius:3px;font-size:12px">Encounters</a>
 </div>
 <script>
 (function () {
-    // Track which view is up rather than asking :visible for it. :visible is
-    // measured from the element's box, so it answers false whenever layout has
-    // not produced one, and the toggle then just re-asserts the state it is
-    // already in and appears dead.
-    var sheetUp = true
-
-    function showSheet(on) {
-        sheetUp = on
-        $('#content-container').toggle(on)
-        $('#calc-view').toggle(!on)
-        $('#ms-toggle').text(on ? 'Calculator' : 'Mastersheet')
+    // The calculator is a separate page rather than a hidden half of this one.
+    // Initialising it inside display:none gives every element a zero width, so
+    // select2 and the sprite sizing come up wrong and it looks like it never
+    // loaded. Navigating means it always boots visible.
+    function calcUrl() {
+        return location.href.replace(/[^\/]*_mastersheet\.html/, 'index.html')
     }
 
-    // Deliberately not inside $(document).ready. jQuery fires ready callbacks
-    // from a single list, so an exception in any earlier one stops every later
-    // one, and the calc's own init throws here. Delegated binds and an
-    // immediate call keep this working regardless.
-    var touched = false
+    window.msGo = function (url) { location.href = url }
 
-    $(document).on('click', '#ms-toggle', function () {
-        touched = true
-        showSheet(!sheetUp)
-    })
+    var tab = document.getElementById('ms-calc-tab')
+    if (tab) {
+        tab.href = calcUrl()
+        tab.addEventListener('click', function (e) { e.preventDefault(); window.msGo(calcUrl()) })
+    }
 
-    // a trainer click loads their team on the right, so follow it to the calc
+    // The built in .trainer-name handler loads the team and records it, but it
+    // is bound on ready and this runs at parse time, so read what it stored on
+    // the next tick rather than racing it.
     $(document).on('click', '.trainer-name', function () {
-        touched = true
-        showSheet(false)
-    })
-
-    // showdown_hooks' Tab handler also toggles .wrapper, which on this page is
-    // only the results header rather than the whole calc. Put it back, and keep
-    // the two views in step with whatever Tab did to the sheet.
-    $(document).on('keydown', function (e) {
-        if ((e.keyCode || e.which) !== 9) return
-        touched = true
         setTimeout(function () {
-            $('.wrapper').show()
-            showSheet(!sheetUp)
+            // localStorage throws outright on a file:// origin, and losing the
+            // handoff is no reason not to open the calculator
+            try {
+                if (localStorage['right']) localStorage['msTrainer'] = localStorage['right']
+            } catch (e) { }
+            window.msGo(calcUrl())
         }, 0)
     })
 
+    // nothing on this page reveals the calculator, so keep it out of the way
     document.body.style.paddingTop = '40px'
-    showSheet(true)
-    window.addEventListener('load', function () { if (!touched) showSheet(true) })
+    $('#calc-view').hide()
 })()
 </script>
 
