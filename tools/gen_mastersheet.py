@@ -455,6 +455,10 @@ def build(key, title, areas_path=None):
 
     function showSheet(on) {
         open = on
+        // .wrapper is the whole calculator, not the results header as its name
+        // suggests: 122k of index.html's 129k. The sheet overlays it, so it
+        // stays shown at all times and never lays out inside display:none.
+        $('.wrapper').show()
         $('#content-container').toggle(on)
         $('#ms-jump').toggle(on)
         $('.ms-tab').each(function () {
@@ -482,9 +486,11 @@ def build(key, title, areas_path=None):
         setTimeout(function () { showSheet(false); setUrlView('calculator') }, 0)
     })
 
+    // showdown_hooks' Tab handler hides .wrapper as its way of swapping views.
+    // Under an overlay that just blanks the calculator, so put it back.
     $(document).on('keydown', function (e) {
         if ((e.keyCode || e.which) !== 9) return
-        setTimeout(function () { $('.wrapper').show(); showSheet(!open) }, 0)
+        setTimeout(function () { showSheet(!open) }, 0)
     })
 
     var wanted = (location.search.match(/[?&]view=([^&]*)/) || [])[1]
