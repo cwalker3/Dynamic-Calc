@@ -440,16 +440,33 @@ def build(key, title, areas_path=None):
 </div>
 <script>
 $(function () {
-    // the sheet is what this page is for, so start there and give the calc a
-    // button rather than leaving Tab as the only way back
-    $('.wrapper').hide()
-    $('#content-container').show()
+    function showSheet(on) {
+        $('#content-container').toggle(on)
+        $('#calc-view').toggle(!on)
+        $('#ms-toggle').text(on ? 'Calculator' : 'Mastersheet')
+    }
+
+    // the sheet is what this page is for, so open on it
     $('body').css('padding-top', '40px')
+    showSheet(true)
 
     $('#ms-toggle').on('click', function () {
-        $('.wrapper').toggle()
-        $('#content-container').toggle()
-        $(this).text($('#content-container').is(':visible') ? 'Calculator' : 'Mastersheet')
+        showSheet(!$('#content-container').is(':visible'))
+    })
+
+    // clicking a trainer loads their team on the right, so follow them over to
+    // the calculator rather than leaving you looking at the sheet
+    $(document).on('click', '.trainer-name', function () { showSheet(false) })
+
+    // showdown_hooks' Tab handler toggles .wrapper too, which on this page is
+    // only the results header rather than the whole calc. Put it back and keep
+    // the two views in step with whatever Tab did to the sheet.
+    $(document).on('keydown', function (e) {
+        if ((e.keyCode || e.which) !== 9) return
+        setTimeout(function () {
+            $('.wrapper').show()
+            showSheet($('#content-container').is(':visible'))
+        }, 0)
     })
 })
 </script>
@@ -472,7 +489,13 @@ $(function () {
        render_species_panels(data, move_ids),
        document_html + render_encounters(areas, data))
 
-    shell = shell.replace("</body>", content + "</body>", 1)
+    # index.html's .wrapper is only the results header, not the whole calc the
+    # way it is on the Pokeweb exported sheets, so wrap the calc in something
+    # that can actually be shown and hidden as a unit
+    body = re.search(r"<body[^>]*>", shell)
+    start, end = body.end(), shell.rindex("</body>")
+    shell = (shell[:start] + '\n<div id="calc-view">\n' + shell[start:end]
+             + "\n</div>\n" + content + shell[end:])
 
     dest = os.path.join(REPO, "%s_mastersheet.html" % key)
     with open(dest, "w", encoding="utf-8") as f:

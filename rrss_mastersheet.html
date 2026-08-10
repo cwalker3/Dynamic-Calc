@@ -107,6 +107,8 @@
 </script>
 
 <body>
+<div id="calc-view">
+
 
 <!-- <div id="encounter-container">
     <h1 id="enc-header">Burned Tower</h1>
@@ -1998,6 +2000,8 @@
 
 
 
+</div>
+
 
 <div id="ms-controls" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#111;
      border-bottom:1px solid #333;padding:6px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -2009,16 +2013,33 @@
 </div>
 <script>
 $(function () {
-    // the sheet is what this page is for, so start there and give the calc a
-    // button rather than leaving Tab as the only way back
-    $('.wrapper').hide()
-    $('#content-container').show()
+    function showSheet(on) {
+        $('#content-container').toggle(on)
+        $('#calc-view').toggle(!on)
+        $('#ms-toggle').text(on ? 'Calculator' : 'Mastersheet')
+    }
+
+    // the sheet is what this page is for, so open on it
     $('body').css('padding-top', '40px')
+    showSheet(true)
 
     $('#ms-toggle').on('click', function () {
-        $('.wrapper').toggle()
-        $('#content-container').toggle()
-        $(this).text($('#content-container').is(':visible') ? 'Calculator' : 'Mastersheet')
+        showSheet(!$('#content-container').is(':visible'))
+    })
+
+    // clicking a trainer loads their team on the right, so follow them over to
+    // the calculator rather than leaving you looking at the sheet
+    $(document).on('click', '.trainer-name', function () { showSheet(false) })
+
+    // showdown_hooks' Tab handler toggles .wrapper too, which on this page is
+    // only the results header rather than the whole calc. Put it back and keep
+    // the two views in step with whatever Tab did to the sheet.
+    $(document).on('keydown', function (e) {
+        if ((e.keyCode || e.which) !== 9) return
+        setTimeout(function () {
+            $('.wrapper').show()
+            showSheet($('#content-container').is(':visible'))
+        }, 0)
     })
 })
 </script>
