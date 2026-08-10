@@ -60,6 +60,18 @@ def read_move_ids():
     return {n: i for i, n in enumerate(names)}
 
 
+def read_authored_order(title):
+    """The sequence built by tools/gen_trainer_order.py, if there is one."""
+    path = os.path.join(REPO, "js", "data", "trainer_order.js")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        m = re.search(r"trainerOrders = (\{.*\})", f.read(), re.S)
+    if not m:
+        return {}
+    return {name: i for i, name in enumerate(json.loads(m.group(1)).get(title, []))}
+
+
 def read_splits(title):
     """The gym/level-cap sections the fragsheet already defines for this game."""
     path = os.path.join(REPO, "calc", "data", "splits.js")
@@ -161,7 +173,11 @@ def render_document(title, trainers, data, move_ids, splits):
     # must match deriveTrainerOrder in js/showdown_hooks.js exactly: the calc
     # indexes customLeads by that order, and .trainer-name clicks look it up by
     # this data-index. Lowest level first, plain code point order on ties.
-    ordered = sorted(trainers.items(), key=lambda kv: (max(p["level"] for p in kv[1]), kv[0]))
+    rank = read_authored_order(title)
+    ordered = sorted(
+        trainers.items(),
+        key=lambda kv: (rank.get(kv[0], float("inf")),
+                        max(p["level"] for p in kv[1]), kv[0]))
     tr_ids = {name: i for i, (name, _) in enumerate(ordered)}
 
     # bucket trainers by the level cap they fall under, so the page reads in

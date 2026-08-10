@@ -844,6 +844,23 @@ function deriveTrainerOrder(sets) {
         return trainers[a].level - trainers[b].level || (a < b ? -1 : a > b ? 1 : 0)
     })
 
+    // ace level is only a stand in for progression. Where an authored order
+    // exists (js/data/trainer_order.js, built from the documentation site's
+    // area listings) it is the real sequence, so prefer it and let anything it
+    // does not mention keep its level based position.
+    var authored = (typeof trainerOrders != "undefined" && trainerOrders[TITLE]) || null
+    if (authored) {
+        var rank = {}
+        for (var r = 0; r < authored.length; r++) rank[authored[r]] = r
+
+        ordered.sort(function (a, b) {
+            var ra = a in rank ? rank[a] : Infinity
+            var rb = b in rank ? rank[b] : Infinity
+            if (ra !== rb) return ra - rb
+            return trainers[a].level - trainers[b].level || (a < b ? -1 : a > b ? 1 : 0)
+        })
+    }
+
     for (var i = 0; i < ordered.length; i++) {
         var entries = trainers[ordered[i]].entries
         for (var j = 0; j < entries.length; j++) {
