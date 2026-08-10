@@ -273,7 +273,7 @@ $(".ability").bind("keyup change", function () {
 
 	var ability = $(this).closest(".poke-info").find(".ability").val();
 
-	var TOGGLE_ABILITIES = ['Flash Fire', 'Intimidate', 'Minus', 'Plus', 'Slow Start', 'Unburden', 'Stakeout'];
+	var TOGGLE_ABILITIES = ['Flash Fire', 'Intimidate', 'Minus', 'Plus', 'Slow Start', 'Unburden', 'Stakeout', 'Download'];
 
 	if (TOGGLE_ABILITIES.indexOf(ability) >= 0) {
 		$(this).closest(".poke-info").find(".abilityToggle").show();
@@ -461,7 +461,7 @@ $(".move-selector").change(function () {
 		var pokeObj = $(this).closest(".poke-info");
 		var pokemon = createPokemon(pokeObj);
 
-		if ( TITLE.includes("Sterling") || TITLE.includes("Ancestral") || TITLE.includes("Maximum")) {
+		if ( TITLE.includes("Sterling") || TITLE.includes("Ancestral") || TITLE.includes("Maximum") || damageGen >= 7) {
 			trueHP = false
 		} else {
 			trueHP = true
@@ -619,7 +619,7 @@ function refresh_next_in() {
 		var tooltip = ability && ability != "Any" ? ` title="${species}: ${ability}"` : ""
 
 		var pok = `<div class="trainer-pok-container no-switch-${noSwitch}"${tooltip}>
-			<img class="trainer-pok right-side ${highlight} ${isFainted} ${isLead}" src="./img/${sprite_style}/${pok_name}.png" data-id="${dataID}">`
+			<img class="trainer-pok right-side ${highlight} ${isFainted} ${isLead}" src="./img/${sprite_style}/${pok_name.replace("sn-s", "sion").replace(/-s$/, "")}.png" data-id="${dataID}">`
 
 		if (item && item != "-" && !item.toLowerCase().includes("none")) {
 			item_name = item.toLowerCase().replace(" ", "_").replace("'","") 
@@ -753,7 +753,7 @@ $(".set-selector").change(function () {
 		}
 
 
-		setPokeSprite('#p2 .poke-sprite', trainerSprites, pokesprite.replace("-glitched", ""))
+		setPokeSprite('#p2 .poke-sprite', trainerSprites, pokesprite.replace("-glitched", "").replace(/-S$/, "").replace("sn-s", "sion"))
 
 		if ($('#player-poks-filter:visible').length > 0) {
 	       box_rolls() 
@@ -1345,6 +1345,14 @@ function createField() {
 	var isBadgeSpec = [$("#SpecL").prop("checked"), $("#SpecR").prop("checked")];
 	var isBadgeDef = [$("#DefL").prop("checked"), $("#DefR").prop("checked")];
 	var isBadgeSpeed = [$("#SpeL").prop("checked"), $("#SpeR").prop("checked")];
+
+	// guard against any misclicks
+	if (damageGen > 3) {
+		isBadgeAtk = [false, false]
+		isBadgeSpec = [false, false]
+		isBadgeDef = [false, false]
+		isBadgeSpeed = [false, false]
+	}
 
 	var createSide = function (i) {
 		return new calc.Side({

@@ -57,7 +57,7 @@ moveChanges = {
 		"Mist Ball": "Moonblast",
 		"Sacred Fire": "Mystical Fire",
 		"Sharpen": "Nuzzle",
-		"Submisson": "Play Rough",
+		"Submission": "Play Rough",
 		"Comet Punch": "Power-Up Punch",
 		"Egg Bomb": "Psychic Fangs",
 		"Smelling Salts": "Psyshield Bash",
@@ -166,6 +166,35 @@ moveChanges = {
         "Fissure": "Headlong Rush"
     },
     "Sterling Silver 1.16": 
+    {
+        "Defend Order": "HP Bug",
+        "Dark Void": "HP Dark",
+        "Twister": "HP Dragon",
+        "Thunder Shock": "HP Electric",
+        "Submission": "HP Fighting",
+        "Ember": "HP Fire",
+        "Feather Dance": "HP Flying",
+        "Astonish": "HP Ghost",
+        "Vine Whip": "HP Grass",
+        "Mud Sport": "HP Ground",
+        "Powder Snow": "HP Ice",
+        "Pound": "HP Normal",
+        "Sludge": "HP Poison",
+        "Psywave": "HP Psychic",
+        "Rock Throw": "HP Rock",
+        "Iron Defense": "HP Steel",
+        "Water Sport": "HP Water",
+        "Charge Beam": "Volt Switch",
+        "Gust": "Hurricane",
+        "Magnitude": "Bulldoze",
+        "Horn Drill": "Drill Run",
+        "Spider Web": "Electroweb",
+        "Slam": "Night Daze",
+        "Fury Swipes": "Dual Chop",
+        "Rollout": "Accelerock",
+        "Fissure": "Headlong Rush"
+    },
+    "Sterling Silver 1.17": 
     {
         "Defend Order": "HP Bug",
         "Dark Void": "HP Dark",
@@ -844,18 +873,16 @@ function addSets(pokes, name) {
 	var currentRow;
 	var currentPoke;
 	var addedpokes = 0;
-	currentParty = []
+	// currentParty = []
 	for (var i = 0; i < rows.length; i++) {
 		var item = false
-		// save readers tag party members with " |Party", which may or may not be
-		// followed by an item, so match on the marker itself rather than what trails it
-		var isPartyMember = rows[i].includes(" |Party")
-		if (isPartyMember) {
-			if (rows[i].includes("@")) {
-				item = rows[i].split("@")[1].trim()
-			}
-			rows[i] = rows[i].split(" |Party")[0]
-		}
+		// if (rows[i].split(" |Party")[1]) {
+		// 	if (rows[i].includes("@")) {
+		// 		item = rows[i].split("@")[1].trim()
+		// 	}
+		// 	rows[i] = rows[i].split(" |Party")[0]
+		// 	currentParty.push(rows[i])
+		// }
 
 
 		currentRow = rows[i].split(/[()@]/);
@@ -891,12 +918,6 @@ function addSets(pokes, name) {
 				currentPoke = getStats(currentPoke, rows, i + 1);
 				currentPoke = getMoves(currentPoke, rows, i);
 				addToDex(currentPoke);
-
-				// sets are keyed by species, so the party has to record the resolved
-				// name rather than the raw line, which may carry a nickname
-				if (isPartyMember && !currentParty.includes(currentPoke.name)) {
-					currentParty.push(currentPoke.name)
-				}
 				addedpokes++;
 			}
 		}

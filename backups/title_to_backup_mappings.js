@@ -26,7 +26,11 @@ backupFiles = {
 	"White 2 Kaizo": "w2k",
 	"Royal Saphire": "roysaph",
 	"Garbage Gold Deluxe": "garbgold",
-	"Azure Platinum": "azure"
+	"Azure Platinum": "azure",
+	"Sterling Silver 1.17": "ster117",
+	"Rose Gold": "rg",
+	"Vintage White Plus": "vwplus",
+	"Navy Saphire": "navy"
 }
 
 

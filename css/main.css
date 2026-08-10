@@ -40,8 +40,6 @@ input[type="file"] {
   background: none;
 }
 
-
-
 .filterable.doc-enc {
     background: #383a59;
 }
@@ -98,32 +96,6 @@ input[type="file"] {
     min-height: 50px;
 }
 
-#open-menu {
-    height:  40px;
-    cursor: pointer;
-}
-
-#settings-menu {
-    border: 2px solid #f1f1f1;
-    z-index: 100;
-    position: absolute;
-    top: 70px;
-    background: #181818;
-    width: 160px;
-    padding: 4px;
-    display: none;
-
-
-}
-
-.menu-item {
-    font-size: 16px;
-    font-weight: 400;
-    border-radius: 6px;
-    cursor: pointer;
-    text-align: center;
-}
-
 .crit-text {
     color:  #FF5555;
 }
@@ -135,8 +107,11 @@ input[type="file"] {
 
 #lvl-cap {
     padding:  4px;
-    width:  60px;
+    width:  80px;
     display: none;
+    height: 32px;
+    text-align: center;
+    font-size: 22px;
 }
 
 #reasoning {
@@ -300,11 +275,11 @@ input[type="file"] {
 }
 
 .title-text {
-    line-height: 40px;
-    height:  40px;
+    line-height: 32px;
+    height:  32px;
     width: auto;
     position: absolute;
-    left: 80px;
+    left: 70px;
     top: -10px;
 }
 
@@ -775,6 +750,14 @@ table td {
     border: 1px solid #bb86fc;
 }
 
+#redux-lvl {
+    color: #bb86fc;
+    font-size: 12px;
+    display: inline-block;
+    cursor: pointer;
+    display: none;
+}
+
 #edge {
     line-height: 20px;
     margin-right: 10px;
@@ -1081,9 +1064,6 @@ table td {
     display:  none !important;
 }
  
-
-
-
 .trainer-pok-list.opposing.no-switch .trainer-pok-container {
     border:  1px solid rgb(0,0,0,0) !important;
 

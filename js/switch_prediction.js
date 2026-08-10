@@ -302,7 +302,7 @@ function get_next_in_g4() {
                     isSE = true
                 }
 
-                if (damageGen == 4 && mov_data["type"] == "Electric" && "Gastrodon,Swampert,Whishcash,Quagsire,Marshtomp".includes(player_pok)){
+                if (damageGen == 4 && mov_data["type"] == "Electric" && "Gastrodon,Swampert,Whishcash,Quagsire,Marshtomp,Gliscor".includes(player_pok)){
                     isSE = true
                 }
 
@@ -322,7 +322,7 @@ function get_next_in_g4() {
                     isSE = true
                 }           
             }
-            
+
 
             if (p1.ability == 'Levitate' && mov_data["type"] == "Ground") {
                 isSE = false
@@ -392,7 +392,7 @@ function get_next_in_g4() {
                 dmg = dmg / 2
             }
 
-            dmg = Math.min(dmg, currentHp)
+            
 
             if (dmg > highestDamage && results[n].move.name != "Sonic Boom" && results[n].move.name != "Dragon Rage" && results[n].move.name != "Night Shade" && results[n].move.name != "Seismic Toss" ) {
                 if (moves[results[n].move.name]['multihit']) {

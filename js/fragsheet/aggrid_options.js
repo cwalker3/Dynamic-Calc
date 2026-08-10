@@ -1,6 +1,6 @@
 params = new URLSearchParams(window.location.search);
 SOURCES = {
-    "9aa37533b7c000992d92": "Blaze Black/Volt White",
+   "9aa37533b7c000992d92": "Blaze Black/Volt White",
    "04770c9a89687b02a9f5": "Blaze Black 2/Volt White 2 Original",
    "945a33720dbd6bc04488": "Blaze Black 2/Volt White 2 Redux 1.4",
    "da1eedc0e39ea07b75bf": "Vintage White",
@@ -39,7 +39,8 @@ SOURCES = {
    "9fd7b1ba4583a9ba7166": "Mariomon",
    "b60bd402cbb993ed3b77": "Parallel Emerald ATO",
     "17af2cc6ec56f8f293bd": "Parallel Emerald Hard",
-    "a0e5b4fa06d9e7762210": "Parallel Emerald Normal"
+    "a0e5b4fa06d9e7762210": "Parallel Emerald Normal",
+    "ster117": "Sterling Silver 1.17" 
 }
 
 function initializeSplits() {
@@ -355,6 +356,8 @@ function displayFragHistory(rowData) {
 
         for (const frag of fragList) {
             let trName = extractTrainerName(frag)
+
+
             
             let pokName = extractPokemonName(frag)
             let spritePath = `./img/pokesprite/${pokName.toLowerCase().replace(/[ :'.-]+/g, '-').replace(/\*/g, '+').replace(/^-|-glitched$|-$/g, '')}.png`
@@ -388,7 +391,8 @@ function extractLevel(str) {
 
 function extractTrainerName(str) {
     // Find "Lvl " followed by numbers, then capture everything after it until the closing parenthesis
-    const match = str.match(/Lvl \d+\s+(.+?)\s*\)/);
+    console.log(str)
+    const match = str.match(/Lvl -?\d+\s+(.+?)\s*\)/);
     return match ? match[1].trim() : null;
 }
 
@@ -487,7 +491,9 @@ function createRowData() {
 
 
 
+
         if (foundEvo) {
+            console.log(`EVO FOUND for ${enc}`)
             continue
         }
 
@@ -511,7 +517,10 @@ function createRowData() {
             setData = JSON.parse(localStorage.customsets)[enc]
        }
 
-       if (typeof setData == "undefined") continue;
+       if (typeof setData == "undefined") {
+            console.log(`no set data found for ${enc}`)
+            continue;
+        }
 
 
 
@@ -565,23 +574,31 @@ function createRowData() {
         let trName = extractTrainerName(frag)
 
 
+
+
         globalSeenTrainers[trName] ||= true
         seenTrainers[trName] ||= true
 
         splitFound = false
 
         for( index in lvlcaps) {
-            let minCap = 0
+            let minCap = -10
 
             if (index > 0) {
                 minCap = lvlcaps[index - 1]
             }
+
+
+
+
 
             if (level <= lvlcaps[index] && level > minCap && (activeSplit == "all" || activeSplit == "all-simple" || activeSplit == index)) {
                 encRow[`split${index}`] += 1
                 encRow[`split${index}FragInfo`].push(frag)
                 encRow.totalKo += 1
                 allKos += 1 
+
+
                 break
             }  
             if (index == 8 && level > minCap && (activeSplit == "all" || activeSplit == "all-simple" || activeSplit == 8)) {

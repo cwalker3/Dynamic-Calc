@@ -269,6 +269,7 @@ function g6ParsePKM(bytes, offset, isParty) {
     if (isParty) {
         g6PartyMons[name] = g6Party.length
         g6Party.push(entry)
+        currentParty.push(name)
     } else if (!g6BoxMons[name]) {
         g6BoxMons[name] = entry
     }
@@ -277,8 +278,6 @@ function g6ParsePKM(bytes, offset, isParty) {
         ? `${nickname} (${name})`
         : `${name}`
 
-    // marks the mon for the player party preview, which the import reads back
-    if (isParty) text += ` |Party`
     if (item) text += ` @ ${item}`
 
     text += "\n"
@@ -321,6 +320,7 @@ function g6ReadSave(buffer, fileName, quiet) {
     g6PartyMons = {}
     g6Party = []
     g6BoxMons = {}
+    currentParty = []
 
     const partyOffset = g6Base + g6Layout.party.offset
     partyCount = view[partyOffset + (6 * G6_SIZE_PARTY)]

@@ -15,15 +15,17 @@ function init_calc() {
   pokChanges = {}
   calcing = false
   partner_name = null
+  currentParty = []
 
 
-  // local storage settings
+  // local storage settings defaults
   if (typeof localStorage.boxspriteindex === 'undefined') {
     localStorage.boxspriteindex = 1
   }
   if (typeof localStorage.themeIndex === 'undefined') {
     localStorage.themeIndex = 1
   }
+
   localStorage.toDelete = ""
 
   if (parseInt(localStorage.themeIndex) == 0) {
@@ -53,11 +55,28 @@ function init_calc() {
   if (localStorage.notes) {
     $('#battle-notes .notes-text').html(localStorage.notes);
   }
-  
+
+  setSettingsTogglesFromLocalStorage()
 }
 
-// Function to check if a local file exists and load it
-// Works with file:// protocol by using script loading attempt
+function setSettingsTogglesFromLocalStorage() {
+    if (sprite_style == "pokesprite") {
+        $('#sprite-toggle input').prop('checked', true)
+    }
+    if (localStorage.themeIndex == '1') {
+        $('#theme-toggle input').prop('checked', true)
+    }
+    if (localStorage.boxrolls == '1') {
+        $('#toggle-boxroll input').prop('checked', true)
+    }
+    if (localStorage.battlenotes == '1') {
+        $('#toggle-battle-notes input').prop('checked', true)
+    }
+}
+
+
+function cleanString(str) {str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()};
+
 function checkAndLoadScript(src, options = {}) {
     const {
         onLoad = null,
@@ -384,7 +403,7 @@ function box_rolls() {
         taken_max_roll=-1
     }
 
-    $('.player-poks .trainer-pok').removeClass('killer').removeClass('defender').removeClass('ohko').removeClass('mb-ohko').removeClass('ohkod').removeClass('mb-ohkod')
+    $('.player-poks .trainer-pok, .player-party .trainer-pok').removeClass('killer').removeClass('defender').removeClass('ohko').removeClass('mb-ohko').removeClass('ohkod').removeClass('mb-ohkod').removeClass('faster')
 
 
     var p1field = createField();
@@ -396,7 +415,7 @@ function box_rolls() {
     var p1speed = parseInt($('.total.totalMod')[1].innerHTML)
 
     if (p1.ability == "Intimidate") {
-        p1.ability = "Minus"
+        p1.ability = "Honey Gather"
     }
 
     var killers = []
@@ -409,7 +428,7 @@ function box_rolls() {
         var monSpeed = mon.rawStats.spe
 
         if (mon.ability == "Intimidate") {
-            mon.ability = "Minus"
+            mon.ability = "Honey Gather"
         }
 
         if (monSpeed > p1speed) {
@@ -436,7 +455,7 @@ function box_rolls() {
                 $(`.trainer-pok[data-id='${box[m]}']`).addClass('killer')
             }
 
-            if (dealt_min_roll == 10000  && taken_max_roll == -1) {
+            if (dealt_min_roll == 10000  && taken_max_roll == -1 && $('#adv-boxrolls').prop('checked')) {
                 if (can_kill(player_dmg, p1hp)) {
                     killers.push({"set": box[m], "move": player_results[j].move.originalName})
                     $(`.trainer-pok[data-id='${box[m]}']`).addClass('ohko')
@@ -458,7 +477,7 @@ function box_rolls() {
                 }         
             }
 
-            if ((selected_move_index == 0 || j == selected_move_index - 1) && taken_max_roll == -1 && dealt_min_roll == 10000) {
+            if ((selected_move_index == 0 || j == selected_move_index - 1) && taken_max_roll == -1 && dealt_min_roll == 10000  && $('#adv-boxrolls').prop('checked')) {
                 can_topkill(opposing_dmg, monHp)
                 if (kill_count >= 16) {
                     $(`.trainer-pok[data-id='${box[m]}']`).addClass('ohkod')  
@@ -546,6 +565,9 @@ function get_current_learnset() {
     for (let i = 0; i < current_learnset["learnset"].length; i++) {
         var lvl = current_learnset["learnset"][i][0]
         var mv_name = current_learnset["learnset"][i][1]
+        if (moveChanges[TITLE] && moveChanges[TITLE][mv_name]) {
+            mv_name = moveChanges[TITLE][mv_name]
+        }
         ls_html += `<div class='ls-row'><div class='ls-level'>${lvl}</div><div class='ls-name'>${mv_name}</div></div>`
     }
     $(".lvl-up-moves").html(ls_html)
@@ -580,6 +602,8 @@ function displayParty() {
 
         $('.player-party').css('display', 'flex')
         $('#clear-party').css('display', 'inline-block')
+
+        $('.player-party').html("")
 
         if (saveUploaded) {
             $('#edge').css('display', 'inline-block')
@@ -626,7 +650,7 @@ function toggleBoxSpriteStyle() {
     })
 }
 
-$('#theme-toggle').click(toggleThemes)
+$('#theme-toggle .slider').click(toggleThemes)
 
 function toggleThemes() {
     var oldStyle = themes[parseInt(localStorage.themeIndex)]
@@ -641,7 +665,7 @@ function toggle_box_rolls() {
     localStorage.boxrolls = (parseInt(localStorage.boxrolls) + 1) % 2   
 }
 
-$('#toggle-boxroll').click(function(){
+$('#toggle-boxroll .slider').click(function(){
     toggle_box_rolls()
     $('#player-poks-filter').toggle()
     if ($('#player-poks-filter:visible').length > 0) {
@@ -649,7 +673,7 @@ $('#toggle-boxroll').click(function(){
     }
 })
 
-$('#toggle-battle-notes').click(function(){
+$('#toggle-battle-notes .slider').click(function(){
     localStorage.battlenotes = (parseInt(localStorage.battlenotes) + 1) % 2   
     $('.poke-import').first().toggle()
 })
@@ -879,7 +903,6 @@ function loadDataSource(data) {
 
     if (TITLE == "Pokemon Colors") initColors();
 
-
     for (move in moves) {
 
         var move_id = move.replace(/-|,|'|’| /g, "").toLowerCase()
@@ -975,6 +998,11 @@ function loadDataSource(data) {
         }
     }
 
+
+
+
+
+
     jsonPoks = data["poks"]
     var jsonPok 
     
@@ -1028,6 +1056,9 @@ function loadDataSource(data) {
     if (TITLE.includes("Sterling")) {
         delete moves.Barrage["multihit"]
         delete MOVES_BY_ID[g].barrage["multihit"]
+
+        moves.Clamp["multihit"] = [2,5]
+        MOVES_BY_ID[g].clamp["multihit"] = [2,5]
 
         MOVES_BY_ID[g].avalanche.target = 'allAdjacentFoes'
         moves.Avalanche.target = 'allAdjacentFoes'
@@ -1225,6 +1256,7 @@ $(document).ready(function() {
    "8f199f3f40194ecc4b8e": "Sterling Silver 1.14",
    "7ea3ff9a608c1963a0a5": "Sterling Silver 1.15",
    "b819708dba8f8c0641d5": "Sterling Silver 1.16",
+   "ster117"             :"Sterling Silver 1.17",
    "5b789b0056c18c5c668b": "Platinum Redux 2.6",
    "de22f896c09fceb0b273": "Maximum Platinum",
    "a0ff5953fbf39bcdddd3": "Cascade White 2",
@@ -1243,7 +1275,10 @@ $(document).ready(function() {
     "a0e5b4fa06d9e7762210": "Parallel Emerald Normal",
     "0d8b65ba6796bf2b3d4c": "White 2 Kaizo",
     "bb8579a3798fd63b429d": "Royal Saphire",
-    "0a37ed78da4e6078ed52": "Garbage Gold Deluxe"
+    "0a37ed78da4e6078ed52": "Garbage Gold Deluxe",
+    "rosegold": "Rose Gold",
+    "vwplus": "Vintage White Plus",
+    "6e2c17e2d1e82f56b448": "Navy Saphire"
     }
 
     // 3DS calcs whose saves savereader_gen6.js can read, mapped to their base game
@@ -1358,6 +1393,43 @@ $(document).ready(function() {
    TITLE = SOURCES[params.get('data')] || "NONE"
    
    if (backupFiles[TITLE]) {
+        if (TITLE == "Vintage White Plus") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=vwplus"
+        }
+
+        if (TITLE == "Renegade Platinum") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=renegadeplatinum"
+        }
+
+        if (TITLE == "Blaze Black 2/Volt White 2 Redux") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=bb2redux&gen=8&challengeMode=true&types=6&view=calculator"
+        }
+
+        if (TITLE == "Photonic Sun/Prismatic Moon") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=pspm&dmgGen=7&gen=7&types=6&view=calculator"
+        }
+
+        if (TITLE == "Blaze Black/Volt White") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=9aa37533b7c000992d92&gen=5&types=5&view=calculator"
+        }
+
+        if (TITLE == "Sacred Gold/Storm Silver") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=sgss"
+        }
+
+        if (TITLE == "Sterling Silver 1.17") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=sterlingsilver"
+        }
+
+        if (TITLE == "Fire Red Omega") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=fro"
+        }
+
+        if (TITLE == "Emerald Kaizo") {
+            location.href = "https://hzla.github.io/Dynamic-Calc-Decomps/?data=ek"
+        }
+
+
         checkAndLoadScript(`./backups/${backupFiles[TITLE]}.js`, {
                 onLoad: (src) => {
                     npoint_data = backup_data
@@ -1383,6 +1455,13 @@ $(document).ready(function() {
 
                             if (mechanics == "hge") {
                                 $('.hp-cntrl label, .z-btn').hide()
+                            }
+
+                            if (TITLE.includes("Redux 1.4")) {
+                                $('#redux-lvl').css('display', 'inline-block');
+                                $('#redux-lvl').click(function() {
+                                    alert("There is a bug in BW2 Challenge mode where the stats of a pokemon do not match it's displayed level. The calc will adjust the level to show it's true stats. However, the damage formula in this game uses Pokemon level as one of the inputs and this formula uses the incorrect displayed level. So the true power level of a pokemon is somewhere between the bugged displayed level, and the non challenge mode level. The challenge mode version of this calc takes into account this bug and adjusts the calculations accordingly.")
+                                })
                             }
 
                             if (localStorage["right"]) {
@@ -1499,12 +1578,12 @@ $(document).ready(function() {
         $('.opposing').change()
    })
 
-   $(document).on('click', '#show-mid', function() {
+   $(document).on('click', '#show-mid .slider', function() {
         $('.panel-mid').toggle()
         $('.panel:not(.panel-mid)').toggleClass('third')
    })
 
-   $(document).on('click', '#open-menu, #settings-menu div', function() {
+   $(document).on('click', '#open-menu', function() {
         $('#settings-menu').toggle()
    })
 
@@ -1712,10 +1791,21 @@ $(document).ready(function() {
     });
 
 
-   $(document).on('click', '#sprite-toggle', function() {
-        toggleBoxSpriteStyle()
 
+   $(document).on('click', '#invert-types', function() {
+        let url = window.location.href;    
+        if (url.indexOf('?') > -1){
+           url += '&invert=true'
+        } else {
+           url += '?invert=true'
+        }
+        window.location.href = url;
    })
+
+   $(document).on('click', '#sprite-toggle .slider', function() {
+        toggleBoxSpriteStyle()
+   })
+
 
     $('.set-selector, .move-selector').on("select2-close", function () {
         setTimeout(function() {
@@ -1723,6 +1813,7 @@ $(document).ready(function() {
             $(':focus').blur();
         }, 1);
     });
+
 
 
    $(document).on('click', '#weather-bar label', function() {
@@ -1825,6 +1916,7 @@ $(document).ready(function() {
         } 
     })
 
+    $(document).on('change', '#adv-boxrolls', box_rolls)
 
     $(document).on('change', '.set-selector', function() {
         setTimeout(function() {

@@ -22,6 +22,7 @@ document.getElementById('save-upload-g45').addEventListener('change', function(e
         const reader = new FileReader();
         saveFileName = $('#save-upload-g45').val().split("\\").pop()
         savExt = saveFileName.slice(-3)
+        currentParty = []
 
         if (baseGame == "Pt") {
             partyCountOffset = 0x9C
@@ -95,6 +96,7 @@ document.getElementById('save-upload-g45').addEventListener('change', function(e
 
                     smallBlockStart = 0
 
+
                     if (baseGame == "Pt" || baseGame == "HGSS") {
                         smallBlock1SaveCount = read32BitIntegerFromUint8Array(view,  smallBlockSize - 16)
                         smallBlock2SaveCount = read32BitIntegerFromUint8Array(view,  smallBlockSize + 0x40000 - 16)
@@ -103,17 +105,29 @@ document.getElementById('save-upload-g45').addEventListener('change', function(e
                             blockId = read32BitIntegerFromUint8Array(view,  smallBlockSize + 0x40000 - 20)
                             console.log("now reading party from block 2")
                             smallBlockStart = 0x40000
+
+                            // in hgss small and big block are always in the same save slot
+                            if (baseGame == "HGSS") {
+                                console.log("now reading box from block 2")
+                                boxDataOffset += 0x40000
+                                bigBlockStart += 0x40000
+                            }
                         } else {
                             console.log("now reading party from block 1")
                             blockId = read32BitIntegerFromUint8Array(view,  smallBlockSize - 20)       
                         }
+
+                        // Check Big Block 1 ID
                         block1Id = read32BitIntegerFromUint8Array(view,  bigBlockStart + bigBlockSize - 20)
-                        if (block1Id != blockId || forceBlock2) {
-                            boxDataOffset += 0x40000
-                            bigBlockStart += 0x40000
-                            console.log("now reading box from block 2")
-                        } else {
-                            console.log("now reading box from block 1")
+
+                        if (baseGame == "Pt") {
+                            if (block1Id != blockId || forceBlock2) {
+                                boxDataOffset += 0x40000
+                                bigBlockStart += 0x40000
+                                console.log("now reading box from block 2")
+                            } else {
+                                console.log("now reading box from block 1")
+                            }
                         }
                     }
 
@@ -295,7 +309,9 @@ function parsePKM(chunk, is_party=false, offset=0) {
      // Extract the first 4 bytes and convert them to a 32-bit integer
     pv = read32BitIntegerFromUint8Array(chunk)
 
-    if (pv == 0) {
+    console.log(`pv: ${pv}, party: ${is_party}`)
+
+    if (pv == 0 && !is_party) {
         return ""
     }
 
@@ -389,11 +405,6 @@ function parsePKM(chunk, is_party=false, offset=0) {
 
     var iv_value = (decryptedData[move_data_offset + 9] << 16) | (decryptedData[move_data_offset + 8]  & 0xFFFF)
     ivs = getIVs(iv_value) 
-
-
-    console.log(mon_name)
-    console.log(ivs)
-
     let met_location
 
     if (baseGame == "Pt" || baseGame == "HGSS") {
@@ -415,6 +426,7 @@ function parsePKM(chunk, is_party=false, offset=0) {
     if (is_party) {
         partyMons[mon_name] = decryptedBattleStats.length - 1
         partyPIDs.push(pv)
+        currentParty.push(mon_name)
         partyExpTables.push(sav_pok_growths[decryptedData[mon_data_offset]])
         partyExpIndexes.push(mon_data_offset + 4)
         partyMovesIndexes.push(move_data_offset)

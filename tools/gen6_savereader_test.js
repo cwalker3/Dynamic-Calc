@@ -48,7 +48,8 @@ const sandbox = {
     setTimeout, setInterval, clearInterval,
     Blob: function () { }, FileReader: function () { },
     URL: { createObjectURL: () => '', revokeObjectURL: () => { } },
-    TITLE: 'Rising Ruby/Sinking Saphire', moveChanges: {}, customSets: {}, natMods: {}
+    TITLE: 'Rising Ruby/Sinking Saphire', moveChanges: {}, customSets: {}, natMods: {},
+    currentParty: []
 };
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
@@ -106,14 +107,12 @@ check('box mons indexed for editing', Object.keys(sandbox.g6BoxMons).length === 
 check('party mons indexed for editing', Object.keys(sandbox.g6PartyMons).length === expected.partyParsed,
     `got ${Object.keys(sandbox.g6PartyMons).length}`);
 
-// party members carry the marker addSets turns into the player party preview
-const marked = text.split('\n').filter(l => l.includes(' |Party'));
-check('every party member is tagged for the party preview', marked.length === expected.partyParsed,
-    `got ${marked.length}: ${JSON.stringify(marked)}`);
-check('no box mon is tagged for the party preview',
-    marked.every(l => Object.keys(sandbox.g6PartyMons).some(n => l.includes(n))));
-check('the marker sits before the item so addSets can recover both',
-    marked.every(l => !l.includes('@') || l.indexOf(' |Party') < l.indexOf('@')));
+// the reader fills the player party preview directly, like the gen 4/5 one does
+check('every party member lands in currentParty', sandbox.currentParty.length === expected.partyParsed,
+    `got ${sandbox.currentParty.length}: ${JSON.stringify(sandbox.currentParty)}`);
+check('currentParty holds only party mons, in save order',
+    sandbox.currentParty.every(n => n in sandbox.g6PartyMons));
+check('the import text carries no leftover party marker', !text.includes('|Party'));
 
 // gen 5+ stores a status enum, not the gen 1-4 bitfield
 check('Asleep writes the gen 5+ sleep enum value', sandbox.g6StatusValue('Asleep') === 2);

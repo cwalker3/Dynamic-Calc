@@ -69,9 +69,19 @@ splitData = {
 		"titles": ["Falkner", "Bugsy", "Whitney", "Morty", "Chuck", "Jasmine", "Pryce", "Clair&Lance", "Elite 4"],
 		"types": ["flying", "bug", "normal", "ghost", "fighting", "steel", "ice", "dragon"]
 	},
+	"Sterling Silver 1.17": {
+		"lvls": [17, 24, 29, 35, 39, 44, 50, 57, 69],
+		"titles": ["Falkner", "Bugsy", "Whitney", "Morty", "Chuck", "Jasmine", "Pryce", "Clair&Lance", "Elite 4"],
+		"types": ["flying", "bug", "normal", "ghost", "fighting", "steel", "ice", "dragon"]
+	},
 	"Vintage White": {
 		"lvls": [15, 28, 35, 44, 58, 67, 74, 86, 73],
 		"titles": ["Cilan/Chili/Cress", "Lenora", "Burgh", "Elesa", "Clay", "Skyla", "Brycen", "Iris", "Elite 4"],
 		"types": ["fire", "normal", "bug", "electric", "ground", "flying", "ice", "dragon"]
-	}
+	},
+	"Black 2 Kaizo +": {
+        "lvls": [17, 28, 38, 49, 59, 72, 85, 95, 100],
+        "titles": ["Cheren", "Roxie", "Burgh", "Elesa", "Clay", "Skyla", "Drayden", "Marlon", "Elite 4"],
+        "types": ["normal", "poison", "bug", "electric", "ground", "flying", "dragon", "water"]
+    },
 }
