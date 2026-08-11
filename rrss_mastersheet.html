@@ -98,6 +98,15 @@
         return '<span class="dex-type" style="background:' + c + '">' + esc(t) + '</span>';
     }
 
+    // The calculator opens this in an iframe over the top of itself, so that
+    // going back to it is not a page load and nothing you had typed is lost.
+    // When that is where we are, talk to it rather than navigating.
+    var embedded = window.parent !== window;
+
+    function tellParent(msg) {
+        try { window.parent.postMessage(msg, '*') } catch (e) { }
+    }
+
     function calcUrl() {
         // Resolve through URL rather than splicing the path. The path can arrive
         // with a doubled slash, and "//index.html" is protocol relative, so the
@@ -329,8 +338,11 @@
     }
 
     function openInCalc(setValue) {
-        // the calculator picks this up on boot and selects the set; it is the
-        // one thing that survives the trip, since the two are separate pages
+        remember();
+        if (embedded) return tellParent({ dex: 'set', set: setValue });
+
+        // Standalone, this is a page load, and a set name in localStorage is
+        // the one thing that survives the trip between two separate pages.
         try { localStorage.setItem('msTrainer', setValue) } catch (e) { }
         location.href = calcUrl();
     }
@@ -356,6 +368,12 @@
     }
 
     el('dex-close').setAttribute('href', calcUrl());
+    el('dex-close').addEventListener('click', function (e) {
+        if (!embedded) return;              // standalone, the href does the work
+        e.preventDefault();
+        remember();
+        tellParent({ dex: 'close' });
+    });
     el('dex-search').addEventListener('input', function () { renderList(); remember() });
 
     var scrollTimer = null;

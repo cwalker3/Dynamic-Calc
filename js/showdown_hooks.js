@@ -814,6 +814,70 @@ function normalizeSetAbilities(sets) {
     }
 }
 
+// The dex over the top of the calculator rather than in place of it.
+//
+// It goes in an iframe, and stays in one. Inlining it here meant the calculator
+// booted on the dex page too and came back half initialised, and the dex carries
+// three megabytes of data that nobody who never opens it should have to load.
+// An iframe keeps both pages whole: the calculator underneath is untouched, so
+// closing the dex costs nothing and everything you had typed is still there.
+function openDex(url) {
+    let frame = $("#dex-frame")
+
+    if (!frame.length) {
+        $("body").append(`<div id="dex-modal"><iframe id="dex-frame" src="${url}"></iframe></div>`)
+        frame = $("#dex-frame")
+
+        // The dex knows it is embedded and talks rather than navigates: its
+        // Calculator tab closes this, and its Open in calculator hands over a
+        // set. Check the sender, because any page can post to any window.
+        $(window).on("message", function(e) {
+            const msg = e.originalEvent
+            if (msg.source !== frame[0].contentWindow) return
+
+            if (msg.data && msg.data.dex == "close") closeDex()
+            if (msg.data && msg.data.dex == "set") {
+                closeDex()
+                applyTrainerSet(msg.data.set)
+            }
+        })
+
+        $(document).on("keydown.dex", function(e) {
+            if (e.key == "Escape") closeDex()
+        })
+    }
+
+    $("#dex-modal").show()
+    $("#view-dex").addClass("active")
+    $("#view-tabs .view-tab").not("#view-dex").removeClass("active")
+    frame.focus()          // so the dex, not the calculator, hears the keyboard
+    markView("dex")
+}
+
+function closeDex() {
+    $("#dex-modal").hide()
+    $("#view-dex").removeClass("active")
+    $("#view-tabs .view-tab").not("#view-dex").first().addClass("active")
+    markView(null)
+}
+
+// Which view you are on, in the address bar, so a reload or a shared link comes
+// back to it. Replaced rather than pushed: the dex is not a place you should
+// have to press back out of, one tab at a time.
+function markView(view) {
+    if (!window.history || !window.history.replaceState) return
+
+    const params = new URLSearchParams(location.search)
+    if (view) {
+        params.set("view", view)
+    } else {
+        params.delete("view")
+    }
+
+    const query = params.toString()
+    history.replaceState({}, document.title, location.pathname + (query ? "?" + query : ""))
+}
+
 // A trainer picked in the dex arrives here as a set name in localStorage, since
 // the two are separate pages and nothing else survives the trip.
 //
@@ -1497,12 +1561,25 @@ $(document).ready(function() {
             // doubled slash, and a following "//name.html" reads as a hostname
             mastersheetURL = new URL(`${MASTERSHEETS[TITLE]}_mastersheet.html${location.search}`, location.href).toString()
             $("#ms-btn").show()
-            $("#ms-btn").click(function() {location.href = mastersheetURL})
+            $("#ms-btn").click(function() {openDex(mastersheetURL)})
 
             // the menu item above sits behind the settings gear, too many
             // clicks for something you switch to constantly
             $("#view-tabs").css("display", "block")
-            $("#view-dex").attr("href", mastersheetURL)
+
+            // The href is a real one so that opening it in a new tab still
+            // works, but a plain click puts the dex over the top of the
+            // calculator instead of navigating to it.
+            $("#view-dex").attr("href", mastersheetURL).click(function(e) {
+                e.preventDefault()
+                openDex(mastersheetURL)
+            })
+
+            // ?view=dex lands straight on it, the same address the Decomps calc
+            // uses, and the one markView puts back when you open it
+            if (new URLSearchParams(location.search).get("view") == "dex") {
+                openDex(mastersheetURL)
+            }
         }
     } else {
         TITLE = "NONE"

@@ -2052,3 +2052,20 @@ table.field {
 #view-tabs .view-tab.active { color: #fff; background: #4a3a5a; border-color: #8a6aaa }
 #view-tabs .view-tab:hover { color: #fff }
 @media (max-width: 1100px) { #view-tabs { display: none !important } }
+
+/* The dex, over the calculator rather than in place of it. Fixed and opaque so
+   nothing of the page underneath shows through, and the iframe carries its own
+   scrolling, so the calculator's scroll position survives a visit untouched. */
+#dex-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: #1b1b1b;
+}
+#dex-modal #dex-frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+}
