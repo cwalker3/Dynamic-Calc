@@ -100,6 +100,15 @@ def build_payload(data_dir, key):
         })
 
     trainers, by_area, matched = order.build_trainers(key, areas)
+
+    # Rematches are the same trainer again at a higher level, and there are 224
+    # of them: five Calvins on Route 102 buried the four trainers you actually
+    # meet there. Dropped here rather than in build_trainers, so that the Next
+    # button, which still has to walk every set the calc holds, is unaffected.
+    trainers = {name: t for name, t in trainers.items() if not t["rematch"]}
+    for area in by_area:
+        area["trainers"] = [n for n in area["trainers"] if n in trainers]
+
     for entry in trainers.values():
         entry["name"] = display_name(entry["name"])
     rosters = {a["name"]: a for a in by_area}
@@ -135,7 +144,9 @@ def build_payload(data_dir, key):
 
     return {"species": species, "areas": area_list, "moves": move_list,
             "moveById": {m["id"]: m for m in move_list}, "types": TYPE_COLOURS,
-            "trainers": trainers, "_matched": matched}
+            "trainers": trainers,
+            "_matched": sum(1 for t in trainers.values()
+                            if t["area"] != "No listed location")}
 
 
 CHROME = r"""
