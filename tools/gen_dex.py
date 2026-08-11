@@ -16,13 +16,21 @@ does not touch body padding or anything else in the calculator's own layout:
 the calculator's header is absolutely positioned, so shifting the flow leaves
 the two overlapping.
 """
+import collections
 import html
 import json
 import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gen_trainer_order as order          # noqa: E402  (shares the name matching)
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# how the calc writes the game's gender symbols, which sit in the private use
+# area and render as tofu in a browser
+GENDER_DISPLAY = {"\ue08e": "♂", "\ue08f": "♀"}
 
 TYPE_COLOURS = {
     "normal": "#9099a1", "fire": "#ff9d55", "water": "#4d90d5", "electric": "#f4d23c",
@@ -51,7 +59,13 @@ def move_id(name):
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
-def build_payload(data_dir):
+def display_name(name):
+    for glyph, symbol in GENDER_DISPLAY.items():
+        name = name.replace(glyph, symbol)
+    return re.sub(r"\s+", " ", name).strip()
+
+
+def build_payload(data_dir, key):
     poke = load(data_dir, "pokemon.json")
     moves = load(data_dir, "moves.json")["moveInfo"]
     areas = load(data_dir, "areas.json")["areas"]
@@ -85,7 +99,12 @@ def build_payload(data_dir):
             "sprite": "./img/pokesprite/%s.png" % slug(entry["name"]),
         })
 
-    # where each species can be caught, and what each area holds
+    trainers, by_area, matched = order.build_trainers(key, areas)
+    for entry in trainers.values():
+        entry["name"] = display_name(entry["name"])
+    rosters = {a["name"]: a for a in by_area}
+
+    # what each area holds, wild and trained, in the order you walk them
     area_list = []
     for area in areas:
         rows = []
@@ -96,8 +115,15 @@ def build_payload(data_dir):
                 if s and s.get("name"):
                     rows.append({"name": s["name"], "method": wild.get("method", ""),
                                  "level": wild.get("level", ""), "rare": bool(s.get("rare"))})
-        if rows:
-            area_list.append({"name": area["name"], "wild": rows})
+        roster = rosters.get(area["name"]) or {}
+        if rows or roster.get("trainers"):
+            area_list.append({"name": area["name"], "wild": rows,
+                              "trainers": roster.get("trainers") or []})
+
+    for area in by_area:                       # the unplaced tail has no wild rows
+        if area.get("unplaced"):
+            area_list.append({"name": area["name"], "wild": [],
+                              "trainers": area["trainers"], "unplaced": True})
 
     move_list = []
     for key, m in moves.items():
@@ -108,7 +134,8 @@ def build_payload(data_dir):
     move_list.sort(key=lambda m: m["name"])
 
     return {"species": species, "areas": area_list, "moves": move_list,
-            "moveById": {m["id"]: m for m in move_list}, "types": TYPE_COLOURS}
+            "moveById": {m["id"]: m for m in move_list}, "types": TYPE_COLOURS,
+            "trainers": trainers, "_matched": matched}
 
 
 CHROME = r"""
@@ -124,6 +151,7 @@ CHROME = r"""
       <div class="dex-subtabs">
         <a class="dex-sub active" data-list="mons" href="#">Mons</a>
         <a class="dex-sub" data-list="areas" href="#">Areas</a>
+        <a class="dex-sub" data-list="trainers" href="#">Trainers</a>
         <a class="dex-sub" data-list="moves" href="#">Moves</a>
       </div>
       <input id="dex-search" placeholder="Search">
@@ -142,6 +170,7 @@ CHROME = r"""
  #dex-title { font-weight:bold; font-size:15px; margin-right:12px; color:#fff }
  .dex-tab, .dex-sub { color:#bbb; background:#2b2b2b; border:1px solid #444; border-radius:4px;
                       padding:4px 12px; text-decoration:none; font-size:13px }
+ .dex-sub { padding:4px 7px; font-size:12px }
  .dex-tab.active, .dex-sub.active { color:#fff; background:#4a3a5a; border-color:#8a6aaa }
  #dex-body { flex:1 1 auto; display:flex; gap:10px; padding:10px; min-height:0 }
  #dex-left { flex:0 0 260px; display:flex; flex-direction:column; min-height:0;
@@ -171,6 +200,19 @@ CHROME = r"""
  .dex-mv .nm { flex:1 1 auto }
  .dex-mv .num { width:38px; text-align:right; color:#ccc }
  .dex-h { color:#fff; font-weight:bold; margin:10px 0 4px; border-bottom:1px solid #333; padding-bottom:3px }
+ .dex-head { padding:6px 8px 3px; color:#9a86b5; font-size:11px; text-transform:uppercase;
+             letter-spacing:.5px; cursor:default; position:sticky; top:0; background:#232323 }
+ .dex-head.sub { position:static; color:#777; padding-left:16px; text-transform:none; letter-spacing:0 }
+ .dex-mon { border:1px solid #333; border-radius:5px; padding:6px 8px; margin-bottom:6px; background:#1f1f1f }
+ .dex-mon-top { display:flex; align-items:center; gap:8px }
+ .dex-mon-top img { width:40px; height:40px; image-rendering:pixelated }
+ .dex-mon-top .nm { font-size:14px; color:#fff }
+ .dex-mon-top .meta { color:#999; font-size:11px }
+ .dex-mon-mv { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px }
+ .dex-mon-mv span.mv { border:1px solid #3a3a3a; border-radius:3px; padding:1px 6px; font-size:11px; background:#262626 }
+ #dex-open-calc { display:inline-block; margin-top:8px; padding:5px 12px; border-radius:4px;
+                  background:#4a3a5a; border:1px solid #8a6aaa; color:#fff; font-size:13px;
+                  text-decoration:none; cursor:pointer }
  @media (max-width: 900px) { #dex-body { flex-direction:column } #dex-left { flex:0 0 auto; max-height:200px } }
 </style>
 <script>
@@ -207,6 +249,27 @@ CHROME = r"""
                 if (!q || a.name.toLowerCase().indexOf(q) >= 0)
                     out.push({ key: a.name, label: a.name, area: true });
             });
+        } else if (list === 'trainers') {
+            // grouped under the area you meet them in, so the list reads in the
+            // order you play; a search on an area name keeps that area whole
+            D.areas.forEach(function (a) {
+                var area = !q || a.name.toLowerCase().indexOf(q) >= 0;
+                var hit = a.trainers.filter(function (t) {
+                    return area || D.trainers[t].name.toLowerCase().indexOf(q) >= 0;
+                });
+                if (!hit.length) return;
+                out.push({ key: a.name, label: a.name, head: true });
+                var roster = 'Trainers';
+                hit.forEach(function (t) {
+                    // the doc site keeps a route's rematch tiers in their own
+                    // roster, and without the divider they read as duplicates
+                    if (D.trainers[t].roster && D.trainers[t].roster !== roster) {
+                        roster = D.trainers[t].roster;
+                        out.push({ key: a.name + '/' + roster, label: roster, head: true, sub: true });
+                    }
+                    out.push({ key: t, label: D.trainers[t].name });
+                });
+            });
         } else {
             D.moves.forEach(function (m) {
                 if (!q || m.name.toLowerCase().indexOf(q) >= 0)
@@ -217,7 +280,9 @@ CHROME = r"""
     }
 
     function renderList() {
-        el('dex-list').innerHTML = rows().slice(0, 1200).map(function (r) {
+        el('dex-list').innerHTML = rows().slice(0, 1600).map(function (r) {
+            if (r.head) return '<div class="dex-head' + (r.sub ? ' sub' : '') + '">'
+                             + esc(r.label) + '</div>';
             return '<div class="dex-row" data-key="' + esc(r.key) + '">' + esc(r.label) + '</div>';
         }).join('');
     }
@@ -278,8 +343,12 @@ CHROME = r"""
           + (sp.tms.length ? '<div class="dex-h">TM / HM</div>'
                 + sp.tms.map(function (t) { return moveRow(t.tm, t.name) }).join('') : '');
 
+        markSel(sp.name);
+    }
+
+    function markSel(key) {
         Array.prototype.forEach.call(document.querySelectorAll('.dex-row'), function (r) {
-            r.classList.toggle('sel', r.getAttribute('data-key') === sp.name);
+            r.classList.toggle('sel', r.getAttribute('data-key') === key);
         });
     }
 
@@ -296,7 +365,80 @@ CHROME = r"""
                        + '<span class="num">Lv' + esc(w.level) + '</span></div>';
               }).join('');
           }).join('');
-        el('dex-right').innerHTML = '<div style="color:#888">Pick a Pokémon to see its moves.</div>';
+        el('dex-right').innerHTML = a.trainers.length
+          ? '<div class="dex-h">Trainers (' + a.trainers.length + ')</div>'
+              + a.trainers.map(function (t) {
+                  var tr = D.trainers[t];
+                  return '<div class="dex-mv" data-trainer="' + esc(t) + '">'
+                       + '<span class="nm">' + esc(tr.name) + '</span>'
+                       + '<span class="num">Lv' + esc(Math.max.apply(null, tr.team.map(function (m) {
+                             return m.level }))) + '</span></div>';
+              }).join('')
+          : '<div style="color:#888">No trainers here.</div>';
+    }
+
+    function moveChip(name) {
+        var m = D.moveById[name.toLowerCase().replace(/[^a-z0-9]/g, '')] || {};
+        var c = m.type ? (D.types[String(m.type).toLowerCase()] || '#3a3a3a') : '#3a3a3a';
+        return '<span class="mv" style="border-color:' + c + '" title="'
+             + esc(m.type || '') + ' ' + esc(m.cat || '') + ' - ' + esc(m.pow || '-') + ' pow, '
+             + esc(m.acc || '-') + ' acc">' + esc(name) + '</span>';
+    }
+
+    function showTrainer(key) {
+        var t = D.trainers[key];
+        if (!t) return;
+
+        el('dex-mid').innerHTML =
+            '<div style="font-size:18px;color:#fff">' + esc(t.name)
+          + (t.rematch ? ' <span style="color:#9a86b5;font-size:12px">rematch</span>' : '') + '</div>'
+          + '<div style="color:#888;font-size:12px;margin-top:2px">'
+          + esc(t.area) + ' &middot; ' + t.team.length + ' Pokémon</div>'
+          + '<a id="dex-open-calc" href="#" data-set="' + esc(t.team[0].value) + '">Open in calculator</a>'
+          + '<div class="dex-h">Team</div>'
+          + t.team.map(function (m) {
+                var sp = byName[m.species] || {};
+                return '<div class="dex-mon">'
+                     + '<div class="dex-mon-top">'
+                     + '<img src="' + esc(sp.sprite || '') + '" onerror="this.style.visibility=\'hidden\'">'
+                     + '<div><div class="nm" data-mon="' + esc(m.species) + '" style="cursor:pointer">'
+                     + esc(m.species) + ' <span style="color:#888;font-size:12px">Lv' + esc(m.level) + '</span></div>'
+                     + '<div class="meta">' + esc(m.ability || '-') + ' &middot; ' + esc(m.nature || '-')
+                     + (m.item ? ' &middot; ' + esc(m.item) : '') + '</div></div></div>'
+                     + '<div class="dex-mon-mv">' + m.moves.map(moveChip).join('') + '</div></div>';
+            }).join('');
+
+        // every move the trainer can throw at you, strongest first: the thing
+        // you actually want before deciding what to send in
+        var seen = {}, all = [];
+        t.team.forEach(function (m) {
+            m.moves.forEach(function (name) {
+                if (seen[name]) return;
+                seen[name] = 1;
+                all.push(D.moveById[name.toLowerCase().replace(/[^a-z0-9]/g, '')] || { name: name });
+            });
+        });
+        all.sort(function (a, b) { return (parseInt(b.pow, 10) || 0) - (parseInt(a.pow, 10) || 0) });
+
+        el('dex-right').innerHTML =
+            '<div class="dex-h">Moves used <span style="float:right;color:#888;font-size:11px">Pow / Acc / PP</span></div>'
+          + all.map(function (m) {
+                return '<div class="dex-mv" data-move="' + esc(m.id || '') + '">'
+                     + (m.type ? typeTag(m.type) : '')
+                     + '<span class="nm">' + esc(m.name) + '</span>'
+                     + '<span class="num">' + esc(m.pow || '-') + '</span>'
+                     + '<span class="num">' + esc(m.acc || '-') + '</span>'
+                     + '<span class="num">' + esc(m.pp || '-') + '</span></div>';
+            }).join('');
+
+        markSel(key);
+    }
+
+    function openInCalc(setValue) {
+        // the calculator picks this up on boot and selects the set; it is the
+        // one thing that survives the trip, since the two are separate pages
+        try { localStorage.setItem('msTrainer', setValue) } catch (e) { }
+        location.href = calcUrl();
     }
 
     function showMove(id) {
@@ -320,28 +462,37 @@ CHROME = r"""
     el('dex-close').setAttribute('href', calcUrl());
     el('dex-search').addEventListener('input', renderList);
 
+    function setList(name) {
+        list = name;
+        Array.prototype.forEach.call(document.querySelectorAll('.dex-sub'), function (x) {
+            x.classList.toggle('active', x.getAttribute('data-list') === name);
+        });
+        el('dex-search').value = '';
+        renderList();
+    }
+
     Array.prototype.forEach.call(document.querySelectorAll('.dex-sub'), function (t) {
         t.addEventListener('click', function (e) {
             e.preventDefault();
-            Array.prototype.forEach.call(document.querySelectorAll('.dex-sub'), function (x) {
-                x.classList.remove('active');
-            });
-            t.classList.add('active');
-            list = t.getAttribute('data-list');
-            el('dex-search').value = '';
-            renderList();
+            setList(t.getAttribute('data-list'));
         });
     });
 
     document.addEventListener('click', function (e) {
+        var open = e.target.closest && e.target.closest('#dex-open-calc');
+        if (open) { e.preventDefault(); openInCalc(open.getAttribute('data-set')); return }
+
         var row = e.target.closest && e.target.closest('.dex-row');
         if (row) {
             var key = row.getAttribute('data-key');
             if (list === 'mons') select(byName[key]);
             else if (list === 'areas') showArea(key);
+            else if (list === 'trainers') showTrainer(key);
             else showMove(key);
             return;
         }
+        var tr = e.target.closest && e.target.closest('[data-trainer]');
+        if (tr) { showTrainer(tr.getAttribute('data-trainer')); return }
         var mon = e.target.closest && e.target.closest('[data-mon]');
         if (mon && byName[mon.getAttribute('data-mon')]) { select(byName[mon.getAttribute('data-mon')]); return }
         var mv = e.target.closest && e.target.closest('[data-move]');
@@ -349,15 +500,28 @@ CHROME = r"""
     });
 
     el('dex-title').textContent = window.DEX_TITLE || 'Dex';
-    renderList();
-    select(D.species[0]);
+
+    // ?list=trainers&sel=Youngster Calvin opens straight onto one entry, so a
+    // view can be linked to rather than described
+    var want = /[?&]list=([^&]*)/.exec(location.search);
+    var sel = /[?&]sel=([^&]*)/.exec(location.search);
+    if (want && ['mons', 'areas', 'trainers', 'moves'].indexOf(decodeURIComponent(want[1])) >= 0) {
+        setList(decodeURIComponent(want[1]));
+    } else {
+        renderList();
+    }
+    var key = sel && decodeURIComponent(sel[1]);
+    if (list === 'trainers' && key && D.trainers[key]) showTrainer(key);
+    else if (list === 'areas' && key) showArea(key);
+    else if (list === 'moves' && key) showMove(key);
+    else select((key && byName[key]) || D.species[0]);
 })()
 </script>
 """
 
 
 def build(key, title, data_dir):
-    payload = build_payload(data_dir)
+    payload = build_payload(data_dir, key)
 
     # A standalone page, not index.html with the dex bolted on. Sharing the
     # shell meant the calculator booted on both pages and the dex's own data
@@ -382,9 +546,12 @@ def build(key, title, data_dir):
     with open(dest, "w", encoding="utf-8") as f:
         f.write(shell)
 
-    print("species: %d" % len(payload["species"]))
-    print("areas:   %d" % len(payload["areas"]))
-    print("moves:   %d" % len(payload["moves"]))
+    print("species:  %d" % len(payload["species"]))
+    print("areas:    %d" % len(payload["areas"]))
+    print("moves:    %d" % len(payload["moves"]))
+    print("trainers: %d (%d placed in an area, %d not listed)"
+          % (len(payload["trainers"]), payload["_matched"],
+             len(payload["trainers"]) - payload["_matched"]))
     print("wrote %s (%.1f MB)" % (dest, os.path.getsize(dest) / 1024 / 1024))
 
 

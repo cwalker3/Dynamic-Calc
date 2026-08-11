@@ -814,6 +814,34 @@ function normalizeSetAbilities(sets) {
     }
 }
 
+// A trainer picked in the dex arrives here as a set name in localStorage, since
+// the two are separate pages and nothing else survives the trip.
+//
+// Selecting it once is not enough. The gen radio rebuilds every ability and item
+// option after this runs, and a rebuilt select falls back to its first entry, so
+// the trainer would land with "(other)" for an ability and no item while their
+// level, nature and moves came through fine. Re-apply until the ability sticks,
+// which is the same moment the item does.
+function applyTrainerSet(fullSetName) {
+    function apply() {
+        $('.opposing').val(fullSetName)
+        $('.opposing .select2-chosen').text(fullSetName)
+        $('.opposing').change()
+    }
+    apply()
+
+    // Selecting the set once is not enough. Changing gen empties every ability
+    // and item select and rebuilds the options, which drops each back to its
+    // first entry, and gen changes twice more after this runs, once per copy of
+    // shared_controls the page loads. The trainer would arrive with the right
+    // level, nature and moves but "(other)" for an ability and no item.
+    //
+    // So re-apply on each rebuild, then let go. The window is short and the gen
+    // selector is hidden for a custom title, so this cannot fight the reader.
+    $('.gen').on('change.msTrainer', function () { setTimeout(apply, 0) })
+    setTimeout(function () { $('.gen').off('change.msTrainer') }, 8000)
+}
+
 // Some data sources ship a trainer order (npoint_data.order, keyed by tr_id) and
 // the calc reads next/prev off it to drive the nav tags. The gen 6 exports carry
 // neither, so derive both: group sets into trainers by their "Lvl N Trainer"
@@ -1574,15 +1602,13 @@ $(document).ready(function() {
                                 $(`[data-id='${localStorage["left"]}']`).click()
                             }
 
-                            // a trainer picked on the mastersheet, which sends
-                            // you here rather than revealing a calculator that
-                            // was initialised while hidden
+                            // a trainer picked in the dex, which sends you here
+                            // rather than revealing a calculator that was
+                            // initialised while hidden
                             if (localStorage["msTrainer"]) {
                                 var msSet = localStorage["msTrainer"]
                                 localStorage.removeItem("msTrainer")
-                                $('.opposing').val(msSet)
-                                $('.opposing .select2-chosen').text(msSet)
-                                $('.opposing').change()
+                                applyTrainerSet(msSet)
                             }
                         }, 20)
                     }

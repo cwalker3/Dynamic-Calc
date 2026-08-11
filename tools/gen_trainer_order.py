@@ -13,9 +13,12 @@ trainer class and p_id is the lead's species, so order has to come from
 somewhere else. areas.json lists areas in game order with their rosters, which
 is exactly that missing information.
 
-Not every calc trainer appears there: rematches and unnamed "[~ N]" entries do
-not. Those get slotted in by ace level, which rises steadily along game order,
-so they land in roughly the right stretch of the game rather than at the end.
+Not every calc trainer appears there: some unnamed "[~ N]" entries do not.
+Those get slotted in by ace level, which rises steadily along game order, so
+they land in roughly the right stretch of the game rather than at the end.
+
+build_trainers does the join, and tools/gen_dex.py reads it too so that the dex
+and the Next button agree about where a trainer stands.
 """
 import bisect
 import collections
@@ -28,42 +31,26 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEST = os.path.join(REPO, "js", "data", "trainer_order.js")
 
 
-def has_moves(entry):
-    return any(m for m in (entry.get("moves") or []))
-
-
-def calc_trainers(key):
-    """trainer name -> ace level, from the calc's own set data."""
-    with open(os.path.join(REPO, "backups", "%s.js" % key), encoding="utf-8") as f:
-        raw = f.read()
-    data = json.loads(raw[raw.index("{"):].rstrip().rstrip(";"))
-
-    levels = collections.defaultdict(list)
-    playable = set()
-    for sets in data["formatted_sets"].values():
-        for set_name, entry in sets.items():
-            m = re.match(r"^Lvl\s+(\d+)\s+(.*)$", set_name.strip())
-            if not m:
-                continue
-            name = m.group(2).strip()
-            levels[name].append(int(m.group(1)))
-            if has_moves(entry):
-                playable.add(name)
-    return {name: max(lv) for name, lv in levels.items()}, playable
-
-
 # the doc site spells a few things differently to the calc's set data
 SPELLINGS = [
     ("PKMN ", "Pokémon "),
     ("Manaic", "Maniac"),
     ("Picknicker", "Picnicker"),
+    ("Triathelete", "Triathlete"),
     (" and ", " & "),
 ]
+
+# The calc's names carry the game's own gender symbols, which sit in the private
+# use area and appear nowhere in the doc site's names: "Swimmer <U+E08F> Nicole"
+# against "Swimmer Nicole". Dropping them matched another fifty trainers.
+GENDER_GLYPHS = "\ue08e\ue08f"
 
 
 def normalise(name):
     for wrong, right in SPELLINGS:
         name = name.replace(wrong, right)
+    for glyph in GENDER_GLYPHS:
+        name = name.replace(glyph, " ")
     return re.sub(r"\s+", " ", name).strip().lower()
 
 
@@ -87,73 +74,141 @@ def alias_keys(name):
     return keys
 
 
-def doc_order(areas_path, trainers):
-    """Calc trainer names in game order, for those the doc site lists."""
-    with open(areas_path, encoding="utf-8") as f:
-        areas = json.load(f)["areas"]
+def base_name(name):
+    """The name without its rematch counter: "Youngster Calvin3" -> the same
+    trainer the doc site lists once, on the route where you first meet him."""
+    return re.sub(r"\d+$", "", name).strip()
 
-    by_norm = collections.defaultdict(list)
-    for name in trainers:
-        by_norm[normalise(name)].append(name)
 
-    entries = [trainer.get("name") or ""
-               for area in areas
-               for roster in (area.get("rosters") or [])
-               for trainer in (roster.get("trainers") or [])]
+def calc_teams(key):
+    """trainer name -> full team, from the calc's own set data.
 
-    placed, ordered = set(), []
+    The doc site knows where a trainer stands and what species they field; only
+    this knows their moves, abilities, items and natures.
+    """
+    with open(os.path.join(REPO, "backups", "%s.js" % key), encoding="utf-8") as f:
+        raw = f.read()
+    data = json.loads(raw[raw.index("{"):].rstrip().rstrip(";"))
 
-    def place(key):
-        if key not in by_norm:
-            return False
-        names = [n for n in by_norm[key] if n not in placed]
-        if not names:
-            return False
-        placed.update(names)
-        ordered.append((key, sorted(names)))
-        return True
+    teams = collections.defaultdict(list)
+    for species, sets in data["formatted_sets"].items():
+        for set_name, entry in sets.items():
+            m = re.match(r"^Lvl\s+(\d+)\s+(.*)$", set_name.strip())
+            if not m:
+                continue
+            teams[m.group(2).strip()].append({
+                "species": species,
+                "level": entry.get("level", 0),
+                "ability": entry.get("ability", ""),
+                "item": entry.get("item", ""),
+                "nature": entry.get("nature", ""),
+                "moves": [mv for mv in (entry.get("moves") or []) if mv],
+                "sub": entry.get("sub_index", 0),
+                # what the calculator's opposing dropdown calls this set, which
+                # is how a trainer here opens over there
+                "value": "%s (%s)" % (species, set_name),
+            })
 
-    # Exact names first, across the whole game, before any alias is considered.
-    # The rematch facility fields disguised gym leaders ("Leader Antonin
-    # [Norman]"), and letting that alias land first would drag Norman's gym
-    # battle to wherever the facility appears.
-    for name in entries:
-        place(exact_key(name))
+    for team in teams.values():
+        team.sort(key=lambda m: m["sub"])
+    return teams
 
-    # second pass fills the gaps, keeping doc order among what is left
-    resolved = {}
-    for i, name in enumerate(entries):
-        for key in alias_keys(name):
-            if key in by_norm and key not in resolved and place(key):
-                resolved[key] = i
-                break
 
-    # first occurrence wins: gym leaders show up again in the rematch facility
-    # late in the file, and taking the last position would sort them to the end
-    order_of = {}
-    for i, name in enumerate(entries):
-        for key in [exact_key(name)] + alias_keys(name):
-            order_of.setdefault(key, i)
+def build_trainers(key, areas):
+    """Calc trainers grouped by the area you meet them in, in game order.
 
-    ordered.sort(key=lambda kv: order_of.get(kv[0], len(entries)))
+    Names alone are not enough to join the two sources: the doc site lists
+    "Youngster Calvin" four times, once per route, while the calc calls those
+    Calvin, Calvin2, Calvin3, Calvin4 with no hint of where any of them stand.
+    So candidates are matched on the base name and then chosen by how well the
+    species and levels line up, which is what actually distinguishes them.
+    """
+    teams = calc_teams(key)
 
-    return [name for _, names in ordered for name in names]
+    candidates = collections.defaultdict(list)
+    for name in teams:
+        candidates[normalise(base_name(name))].append(name)
+
+    def keys_for(doc_name):
+        stripped = exact_key(doc_name)
+        return [stripped] + alias_keys(doc_name) + [normalise(base_name(stripped))]
+
+    def score(name, wanted, ace):
+        """Team overlap first, then closeness of level, then of size.
+
+        A trainer's five rematch teams share his name and rarely a species, so
+        overlap alone leaves them tied and the pick arbitrary: that is what put
+        Rich Boy Winston's fourth rematch where his first battle belongs. Levels
+        rise steadily across the tiers, so they order what species cannot.
+        """
+        got = {(m["species"], m["level"]) for m in teams[name]}
+        mine = max(m["level"] for m in teams[name])
+        return (len(got & wanted), -abs(mine - ace), -abs(len(teams[name]) - len(wanted)))
+
+    taken, by_area = set(), []
+    placement = {}
+    for area in areas:
+        rows = []
+        for roster in (area.get("rosters") or []):
+            title = roster.get("title") or "Trainers"
+            for entry in (roster.get("trainers") or []):
+                doc_name = entry.get("name") or ""
+                team = entry.get("team")
+                team = team if isinstance(team, list) else [team]
+                team = [m for m in team if m]
+                wanted = {(m.get("species"), m.get("level")) for m in team}
+                ace = max([m.get("level") or 0 for m in team] or [0])
+
+                pool = [n for k in keys_for(doc_name)
+                        for n in candidates.get(k, []) if n not in taken]
+                if not pool:
+                    continue
+                best = max(pool, key=lambda n: score(n, wanted, ace))
+                taken.add(best)
+                rows.append(best)
+                placement[best] = {"area": area["name"], "roster": title,
+                                   "rematch": roster.get("kind") == "rematch"}
+        if rows:
+            by_area.append({"name": area["name"], "trainers": rows})
+
+    # Everything the doc site does not place: rematches beyond the appearances
+    # it lists, and the unnamed "[~ N]" rom slots. Kept rather than dropped,
+    # under a heading that says plainly they have no known location.
+    rest = sorted((n for n in teams if n not in taken),
+                  key=lambda n: (max(m["level"] for m in teams[n]), n))
+    if rest:
+        by_area.append({"name": "No listed location", "trainers": rest, "unplaced": True})
+
+    trainers = {}
+    for name, team in teams.items():
+        where = placement.get(name) or {"area": "No listed location", "roster": ""}
+        trainers[name] = {"name": name, "team": team,
+                          "area": where["area"], "roster": where["roster"],
+                          "rematch": bool(where.get("rematch"))}
+    return trainers, by_area, len(taken)
 
 
 def build(key, title, areas_path):
-    trainers, playable = calc_trainers(key)
-    ordered = doc_order(areas_path, trainers)
+    with open(areas_path, encoding="utf-8") as f:
+        areas = json.load(f)["areas"]
+
+    trainers, by_area, matched = build_trainers(key, areas)
+    aces = {name: max(m["level"] for m in t["team"]) for name, t in trainers.items()}
+    playable = {name for name, t in trainers.items()
+                if any(m["moves"] for m in t["team"])}
+
+    ordered = [name for area in by_area if not area.get("unplaced")
+               for name in area["trainers"]]
     placed = set(ordered)
 
     # Slot the rest by where their ace ranks among the placed trainers, rather
     # than by walking a running max of the sequence. A single name collision
-    # (the doc site lists an early route Rich Boy Winston, the calc only has his
-    # level 75 rematch) would otherwise spike that running max and dump every
-    # later trainer into one bucket. Ranking shifts by one position instead.
-    placed_aces = sorted(trainers[name] for name in ordered)
+    # would otherwise spike that running max and dump every later trainer into
+    # one bucket. Ranking shifts by one position instead.
+    placed_aces = sorted(aces[name] for name in ordered)
 
     leftovers = collections.defaultdict(list)
-    for name, ace in sorted(trainers.items(), key=lambda kv: (kv[1], kv[0])):
+    for name, ace in sorted(aces.items(), key=lambda kv: (kv[1], kv[0])):
         if name in placed:
             continue
         leftovers[bisect.bisect_right(placed_aces, ace)].append(name)
