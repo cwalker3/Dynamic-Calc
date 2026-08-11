@@ -1468,6 +1468,11 @@ $(document).ready(function() {
             mastersheetURL = location.href.replace("index.html","").replace("?data", `/${MASTERSHEETS[TITLE]}_mastersheet.html?data`)
             $("#ms-btn").show()
             $("#ms-btn").click(function() {location.href = mastersheetURL})
+
+            // the menu item above sits behind the settings gear, too many
+            // clicks for something you switch to constantly
+            $("#view-tabs").css("display", "block")
+            $("#view-dex").attr("href", mastersheetURL)
         }
     } else {
         TITLE = "NONE"

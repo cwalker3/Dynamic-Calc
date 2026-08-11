@@ -2026,3 +2026,29 @@ table.field {
 
 
 
+
+/* Calculator/Dex tabs. Absolutely positioned in the gap between the gear and
+   the title: #rom-title is itself absolute and centred over the flow, so tabs
+   placed in normal flow end up underneath it. */
+#view-tabs {
+    display: none;
+    position: absolute;
+    left: 92px;
+    top: 12px;
+    z-index: 5;
+    white-space: nowrap;
+}
+#view-tabs .view-tab {
+    display: inline-block;
+    color: #bbb;
+    background: #2b2b2b;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 7px 15px;
+    margin-right: 4px;
+    text-decoration: none;
+    font-size: 14px;
+}
+#view-tabs .view-tab.active { color: #fff; background: #4a3a5a; border-color: #8a6aaa }
+#view-tabs .view-tab:hover { color: #fff }
+@media (max-width: 1100px) { #view-tabs { display: none !important } }
