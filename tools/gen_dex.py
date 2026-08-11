@@ -134,9 +134,8 @@ CHROME = r"""
   </div>
 </div>
 <style>
- #dex-open { position:fixed; right:12px; bottom:12px; z-index:9998; background:#3a3a3a; color:#fff;
-             border:1px solid #777; border-radius:4px; padding:6px 14px; font-size:13px; cursor:pointer }
- #dex-overlay { display:none; position:fixed; inset:0; z-index:10000; background:#1b1b1b; color:#ddd;
+ #dex-open { display:none }
+ #dex-overlay { display:flex; position:fixed; inset:0; z-index:10000; background:#1b1b1b; color:#ddd;
                 font-family:inherit; flex-direction:column }
  #dex-bar { flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:8px 12px;
             background:#111; border-bottom:1px solid #333 }
@@ -187,10 +186,9 @@ CHROME = r"""
         return '<span class="dex-type" style="background:' + c + '">' + esc(t) + '</span>';
     }
 
-    function open(on) {
-        el('dex-overlay').style.display = on ? 'flex' : 'none';
-        el('dex-open').style.display = on ? 'none' : 'block';
-        if (on && !cur) select(D.species[0]);
+    function calcUrl() {
+        var q = location.search.replace(/([?&])view=[^&]*&?/, '$1').replace(/[?&]$/, '');
+        return location.pathname.replace(/[^\/]*$/, 'index.html') + q;
     }
 
     function rows() {
@@ -316,8 +314,7 @@ CHROME = r"""
           }).join('');
     }
 
-    el('dex-open').addEventListener('click', function () { open(true) });
-    el('dex-close').addEventListener('click', function (e) { e.preventDefault(); open(false) });
+    el('dex-close').setAttribute('href', calcUrl());
     el('dex-search').addEventListener('input', renderList);
 
     Array.prototype.forEach.call(document.querySelectorAll('.dex-sub'), function (t) {
@@ -350,8 +347,7 @@ CHROME = r"""
 
     el('dex-title').textContent = window.DEX_TITLE || 'Dex';
     renderList();
-    // this page exists for the dex, so open it unless the url says otherwise
-    open(!/[?&]view=calculator/.test(location.search));
+    select(D.species[0]);
 })()
 </script>
 """
@@ -360,13 +356,24 @@ CHROME = r"""
 def build(key, title, data_dir):
     payload = build_payload(data_dir)
 
-    with open(os.path.join(REPO, "index.html"), encoding="utf-8") as f:
-        shell = f.read()
-
-    content = ('\n<script>window.DEX_TITLE = %s; window.DEX_DATA = %s;</script>\n'
-               % (json.dumps(title + " Dex"), json.dumps(payload, ensure_ascii=False))) + CHROME
-
-    shell = shell.replace("</body>", content + "</body>", 1)
+    # A standalone page, not index.html with the dex bolted on. Sharing the
+    # shell meant the calculator booted on both pages and the dex's own data
+    # loaded alongside it, and the calculator came back half initialised.
+    # Nothing here can touch the calculator, because none of it is loaded.
+    shell = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>%s</title>
+<script src="./js/vendor/jquery-1.9.1.min.js"></script>
+<style>html,body{margin:0;padding:0;background:#1b1b1b;color:#ddd;
+ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}</style>
+</head><body>
+<script>window.DEX_TITLE = %s; window.DEX_DATA = %s;</script>
+%s
+</body></html>
+""" % (esc(title + " Dex"), json.dumps(title + " Dex"),
+       json.dumps(payload, ensure_ascii=False), CHROME)
 
     dest = os.path.join(REPO, "%s_mastersheet.html" % key)
     with open(dest, "w", encoding="utf-8") as f:
