@@ -228,7 +228,7 @@ CHROME = r"""
 </style>
 <script>
 (function () {
-    var D = window.DEX_DATA, cur = null, list = 'mons';
+    var D = window.DEX_DATA, cur = null, list = 'mons', curKey = null, curKind = 'mons';
     var byName = {}; D.species.forEach(function (s) { byName[s.name] = s });
 
     function el(id) { return document.getElementById(id) }
@@ -245,6 +245,25 @@ CHROME = r"""
         // browser reads index.html as the hostname and fails to connect.
         var q = location.search.replace(/([?&])view=[^&]*&?/, '$1').replace(/[?&]$/, '');
         return new URL('index.html' + q, location.href).toString();
+    }
+
+    // Where you were last time. The trip to the calculator and back is a full
+    // page load, so without this every visit starts at the top of the mon list.
+    // Wrapped because localStorage throws outright on a file:// origin, and an
+    // exception here would take the rest of the dex down with it.
+    var STORE = 'dexState:' + (window.DEX_TITLE || '');
+
+    function remember() {
+        try {
+            localStorage.setItem(STORE, JSON.stringify({
+                list: list, kind: curKind, sel: curKey,
+                q: el('dex-search').value, scroll: el('dex-list').scrollTop
+            }));
+        } catch (e) { }
+    }
+
+    function recall() {
+        try { return JSON.parse(localStorage.getItem(STORE) || 'null') } catch (e) { return null }
     }
 
     function rows() {
@@ -354,13 +373,16 @@ CHROME = r"""
           + (sp.tms.length ? '<div class="dex-h">TM / HM</div>'
                 + sp.tms.map(function (t) { return moveRow(t.tm, t.name) }).join('') : '');
 
-        markSel(sp.name);
+        markSel(sp.name, 'mons');
     }
 
-    function markSel(key) {
+    function markSel(key, kind) {
+        curKey = key;
+        curKind = kind;
         Array.prototype.forEach.call(document.querySelectorAll('.dex-row'), function (r) {
             r.classList.toggle('sel', r.getAttribute('data-key') === key);
         });
+        remember();
     }
 
     function showArea(name) {
@@ -386,6 +408,8 @@ CHROME = r"""
                              return m.level }))) + '</span></div>';
               }).join('')
           : '<div style="color:#888">No trainers here.</div>';
+
+        markSel(a.name, 'areas');
     }
 
     function moveChip(name) {
@@ -442,7 +466,7 @@ CHROME = r"""
                      + '<span class="num">' + esc(m.pp || '-') + '</span></div>';
             }).join('');
 
-        markSel(key);
+        markSel(key, 'trainers');
     }
 
     function openInCalc(setValue) {
@@ -468,18 +492,27 @@ CHROME = r"""
           + learners.map(function (s) {
               return '<div class="dex-mv" data-mon="' + esc(s.name) + '"><span class="nm">' + esc(s.name) + '</span></div>';
           }).join('');
+
+        markSel(id, 'moves');
     }
 
     el('dex-close').setAttribute('href', calcUrl());
-    el('dex-search').addEventListener('input', renderList);
+    el('dex-search').addEventListener('input', function () { renderList(); remember() });
 
-    function setList(name) {
+    var scrollTimer = null;
+    el('dex-list').addEventListener('scroll', function () {
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(remember, 200);
+    });
+
+    function setList(name, keepSearch) {
         list = name;
         Array.prototype.forEach.call(document.querySelectorAll('.dex-sub'), function (x) {
             x.classList.toggle('active', x.getAttribute('data-list') === name);
         });
-        el('dex-search').value = '';
+        if (!keepSearch) el('dex-search').value = '';
         renderList();
+        remember();
     }
 
     Array.prototype.forEach.call(document.querySelectorAll('.dex-sub'), function (t) {
@@ -512,20 +545,42 @@ CHROME = r"""
 
     el('dex-title').textContent = window.DEX_TITLE || 'Dex';
 
-    // ?list=trainers&sel=Youngster Calvin opens straight onto one entry, so a
-    // view can be linked to rather than described
+    var LISTS = ['mons', 'areas', 'trainers', 'moves'];
+
+    function openEntry(kind, key) {
+        if (kind === 'trainers' && D.trainers[key]) showTrainer(key);
+        else if (kind === 'areas' && key) showArea(key);
+        else if (kind === 'moves' && D.moveById[key]) showMove(key);
+        else if (byName[key]) select(byName[key]);
+        else return false;
+        return true;
+    }
+
+    // An explicit ?list=trainers&sel=Youngster Calvin wins, so a view can still
+    // be linked to. Otherwise pick up where this browser left off, which is what
+    // makes the trip to the calculator and back free.
     var want = /[?&]list=([^&]*)/.exec(location.search);
     var sel = /[?&]sel=([^&]*)/.exec(location.search);
-    if (want && ['mons', 'areas', 'trainers', 'moves'].indexOf(decodeURIComponent(want[1])) >= 0) {
+    var saved = (want || sel) ? null : recall();
+
+    if (want && LISTS.indexOf(decodeURIComponent(want[1])) >= 0) {
         setList(decodeURIComponent(want[1]));
+    } else if (saved && LISTS.indexOf(saved.list) >= 0) {
+        el('dex-search').value = saved.q || '';
+        setList(saved.list, true);
     } else {
         renderList();
     }
-    var key = sel && decodeURIComponent(sel[1]);
-    if (list === 'trainers' && key && D.trainers[key]) showTrainer(key);
-    else if (list === 'areas' && key) showArea(key);
-    else if (list === 'moves' && key) showMove(key);
-    else select((key && byName[key]) || D.species[0]);
+
+    // before the selection below, which saves state as it lands: restoring the
+    // scroll afterwards would first store a 0 and lose the position for anyone
+    // who leaves again without scrolling
+    if (saved && saved.scroll) el('dex-list').scrollTop = saved.scroll;
+
+    if (!(sel && openEntry(list, decodeURIComponent(sel[1])))
+        && !(saved && openEntry(saved.kind, saved.sel))) {
+        select(D.species[0]);
+    }
 })()
 </script>
 """
