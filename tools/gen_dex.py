@@ -187,8 +187,11 @@ CHROME = r"""
     }
 
     function calcUrl() {
+        // Resolve through URL rather than splicing the path. The path can arrive
+        // with a doubled slash, and "//index.html" is protocol relative, so the
+        // browser reads index.html as the hostname and fails to connect.
         var q = location.search.replace(/([?&])view=[^&]*&?/, '$1').replace(/[?&]$/, '');
-        return location.pathname.replace(/[^\/]*$/, 'index.html') + q;
+        return new URL('index.html' + q, location.href).toString();
     }
 
     function rows() {

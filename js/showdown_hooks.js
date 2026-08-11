@@ -1465,7 +1465,9 @@ $(document).ready(function() {
         }
 
         if (MASTERSHEETS[TITLE] && !location.href.includes("mastersheet")) {
-            mastersheetURL = location.href.replace("index.html","").replace("?data", `/${MASTERSHEETS[TITLE]}_mastersheet.html?data`)
+            // resolved rather than spliced: the old string replace left a
+            // doubled slash, and a following "//name.html" reads as a hostname
+            mastersheetURL = new URL(`${MASTERSHEETS[TITLE]}_mastersheet.html${location.search}`, location.href).toString()
             $("#ms-btn").show()
             $("#ms-btn").click(function() {location.href = mastersheetURL})
 
