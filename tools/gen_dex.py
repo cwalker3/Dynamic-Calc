@@ -264,6 +264,7 @@ CHROME = r"""
 <div id="dex-overlay">
   <div id="dex-bar">
     <span id="dex-title"></span>
+    <a class="dex-tab" id="dex-back" href="#"></a>
     <a class="dex-tab" id="dex-close" href="#">Calculator</a>
     <a class="dex-tab active" href="#">Dex</a>
   </div>
@@ -311,6 +312,8 @@ CHROME = r"""
                       padding:4px 12px; text-decoration:none; font-size:13px }
  .dex-sub { padding:4px 7px; font-size:12px }
  .dex-tab.active, .dex-sub.active { color:#fff; background:#4a3a5a; border-color:#8a6aaa }
+ #dex-back { display:none; margin-right:auto; max-width:280px; overflow:hidden;
+             text-overflow:ellipsis; white-space:nowrap }
  #dex-body { flex:1 1 auto; display:flex; gap:10px; padding:10px; min-height:0 }
  #dex-left { flex:0 0 260px; display:flex; flex-direction:column; min-height:0;
              background:#232323; border:1px solid #333; border-radius:6px; padding:8px }
@@ -377,6 +380,37 @@ CHROME = r"""
 (function () {
     var D = window.DEX_DATA, cur = null, list = 'mons', curKey = null, curKind = 'mons';
     var expanded = {};              // which areas are open on the trainer list
+
+    // Where the panes were before you followed something out of them. Clicking
+    // a Pokemon on a trainer's team replaces both panes with that species, and
+    // without this the way back is to find the trainer in the list again.
+    var trail = [];
+
+    function labelOf(kind, key) {
+        if (kind === 'trainers') return (D.trainers[key] || {}).name || key;
+        if (kind === 'moves') return (D.moveById[key] || {}).name || key;
+        return key;                 // areas and species are named by their key
+    }
+
+    function drawBack() {
+        var prev = trail[trail.length - 1];
+        el('dex-back').style.display = prev ? 'inline-block' : 'none';
+        if (prev) el('dex-back').textContent = '\u2190 ' + labelOf(prev.kind, prev.key);
+    }
+
+    // following a link out of a pane, as opposed to picking from the list
+    function follow(kind, key) {
+        var from = curKind && curKey ? { kind: curKind, key: curKey } : null;
+        if (!openEntry(kind, key)) return;
+        if (from) trail.push(from);
+        drawBack();
+    }
+
+    function goBack() {
+        var prev = trail.pop();
+        if (prev) openEntry(prev.kind, prev.key);
+        drawBack();
+    }
 
     // Which run you are actually playing. The rom holds both versions, both
     // rivals and all three starter branches at once, and a save only ever meets
@@ -771,6 +805,8 @@ CHROME = r"""
         });
         if (!keepSearch) el('dex-search').value = '';
         el('dex-search').placeholder = PLACEHOLDERS[name] || 'Search';
+        trail = [];
+        drawBack();
         el('dex-run').style.display = name === 'trainers' ? 'block' : 'none';
         renderList();
         remember();
@@ -805,8 +841,14 @@ CHROME = r"""
             return;
         }
 
+        var back = e.target.closest && e.target.closest('#dex-back');
+        if (back) { e.preventDefault(); goBack(); return }
+
         var row = e.target.closest && e.target.closest('.dex-row');
         if (row) {
+            // picking from the list is a fresh start, not a step in a trail
+            trail = [];
+            drawBack();
             var key = row.getAttribute('data-key');
             if (list === 'mons') select(byName[key]);
             else if (list === 'areas') showArea(key);
@@ -815,11 +857,11 @@ CHROME = r"""
             return;
         }
         var tr = e.target.closest && e.target.closest('[data-trainer]');
-        if (tr) { showTrainer(tr.getAttribute('data-trainer')); return }
+        if (tr) { follow('trainers', tr.getAttribute('data-trainer')); return }
         var mon = e.target.closest && e.target.closest('[data-mon]');
-        if (mon && byName[mon.getAttribute('data-mon')]) { select(byName[mon.getAttribute('data-mon')]); return }
+        if (mon && byName[mon.getAttribute('data-mon')]) { follow('mons', mon.getAttribute('data-mon')); return }
         var mv = e.target.closest && e.target.closest('[data-move]');
-        if (mv && mv.getAttribute('data-move')) showMove(mv.getAttribute('data-move'));
+        if (mv && mv.getAttribute('data-move')) follow('moves', mv.getAttribute('data-move'));
     });
 
     if (embedded) {
