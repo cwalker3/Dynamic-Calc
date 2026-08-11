@@ -14,11 +14,11 @@ G6_BOX_COUNT = 31   // boxes a gen 6 save holds
 // the later ones can be used as storage without cluttering the calc. Raise this
 // to G6_BOX_COUNT to pull in everything.
 G6_BOXES_IMPORTED = 3
-// The last box is the graveyard. Its Pokemon are read for where they were met
-// and nothing else: a route you lost a Pokemon on is still a route you have
-// used up, so the dex has to know about it, while the calc must not offer a
-// dead Pokemon as something you can send out.
-G6_BOX_GRAVEYARD = G6_BOX_COUNT
+// Box 7 is the graveyard. Its Pokemon are read for where they were met and
+// nothing else: a route you lost a Pokemon on is still a route you have used
+// up, so the dex has to know about it, while the calc must not offer a dead
+// Pokemon as something you can send out.
+G6_BOX_GRAVEYARD = 7
 G6_BEEF = 0x42454546
 
 G6_LAYOUTS = {
