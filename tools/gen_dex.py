@@ -350,7 +350,8 @@ CHROME = r"""
 
     el('dex-title').textContent = window.DEX_TITLE || 'Dex';
     renderList();
-    if (/[?&]view=dex/.test(location.search)) open(true);
+    // this page exists for the dex, so open it unless the url says otherwise
+    open(!/[?&]view=calculator/.test(location.search));
 })()
 </script>
 """
