@@ -889,7 +889,9 @@ function sendCaughtToDex() {
     frame[0].contentWindow.postMessage({
         dex: "caught",
         species: Object.keys(g6Caught.species),
-        areas: Object.keys(g6Caught.areas)
+        areas: Object.keys(g6Caught.areas),
+        dead: Object.keys(g6Caught.dead),
+        deadAreas: Object.keys(g6Caught.deadAreas)
     }, "*")
 }
 

@@ -14,6 +14,11 @@ G6_BOX_COUNT = 31   // boxes a gen 6 save holds
 // the later ones can be used as storage without cluttering the calc. Raise this
 // to G6_BOX_COUNT to pull in everything.
 G6_BOXES_IMPORTED = 3
+// The last box is the graveyard. Its Pokemon are read for where they were met
+// and nothing else: a route you lost a Pokemon on is still a route you have
+// used up, so the dex has to know about it, while the calc must not offer a
+// dead Pokemon as something you can send out.
+G6_BOX_GRAVEYARD = G6_BOX_COUNT
 G6_BEEF = 0x42454546
 
 G6_LAYOUTS = {
@@ -69,8 +74,9 @@ g6BoxMons = {}          // display name -> { offset, dec, species, growth }
 
 // What the save says you already have, and where you caught it. The dex marks
 // its encounter lists off with this, which is the whole point of a nuzlocke
-// route list: knowing which routes you have already used up.
-g6Caught = { species: {}, areas: {} }
+// route list: knowing which routes you have already used up. The dead are kept
+// apart so the dex can say which of the two it is.
+g6Caught = { species: {}, areas: {}, dead: {}, deadAreas: {} }
 g6File = null           // retained File, re-read by the sync button
 g6FileHandle = null     // FileSystemFileHandle when the browser supports it
 g6DirHandle = null      // save folder, granted once so writes can go back in place
@@ -246,7 +252,7 @@ function g6ExpTable(species) {
 
 // ---------------------------------------------------------------- reading ---
 
-function g6ParsePKM(bytes, offset, isParty) {
+function g6ParsePKM(bytes, offset, isParty, buried) {
     const dec = g6Decrypt(bytes)
     const species = g6ReadU16(dec, 0x08)
 
@@ -276,8 +282,19 @@ function g6ParsePKM(bytes, offset, isParty) {
     ]
 
     const met = g6MetLocation(g6ReadU16(dec, 0xDA))
+    const known = met && met != "Unknown"
+
+    // The graveyard box stops here: the route is spent either way, but a dead
+    // Pokemon is not one you can pick in the calc, so it goes no further than
+    // this and never reaches the import text or the box tables.
+    if (buried) {
+        g6Caught.dead[name] = true
+        if (known) g6Caught.deadAreas[met] = true
+        return ""
+    }
+
     g6Caught.species[name] = true
-    if (met && met != "Unknown") g6Caught.areas[met] = true
+    if (known) g6Caught.areas[met] = true
 
     const entry = { offset: offset, dec: dec, species: species, growth: g6_growths[species] || 0 }
     if (isParty) {
@@ -334,7 +351,7 @@ function g6ReadSave(buffer, fileName, quiet) {
     g6PartyMons = {}
     g6Party = []
     g6BoxMons = {}
-    g6Caught = { species: {}, areas: {} }
+    g6Caught = { species: {}, areas: {}, dead: {}, deadAreas: {} }
     currentParty = []
 
     const partyOffset = g6Base + g6Layout.party.offset
@@ -354,11 +371,25 @@ function g6ReadSave(buffer, fileName, quiet) {
         showdownImport += g6ParsePKM(view.subarray(offset, offset + G6_SIZE_STORED), offset, false)
     }
 
+    // read for their met locations alone, and they return nothing to import
+    const graveStart = (G6_BOX_GRAVEYARD - 1) * G6_BOX_SIZE
+    for (let i = graveStart; i < graveStart + G6_BOX_SIZE; i++) {
+        const offset = boxOffset + (i * G6_SIZE_STORED)
+        g6ParsePKM(view.subarray(offset, offset + G6_SIZE_STORED), offset, false, true)
+    }
+
     $('.import-team-text').val(showdownImport)
 
     changelog = "<h4>Changelog:</h4>"
     changelog += `<p>${fileName} loaded (${detected.name}, ${g6Party.length} in party, `
         + `boxes 1-${G6_BOXES_IMPORTED} of ${G6_BOX_COUNT})</p>`
+
+    const buried = Object.keys(g6Caught.dead).length
+    if (buried) {
+        changelog += `<p>Box ${G6_BOX_GRAVEYARD} read as the graveyard: ${buried} `
+            + `${buried == 1 ? "Pokémon marks its route" : "Pokémon mark their routes"} `
+            + `off in the dex, and none of them are offered here.</p>`
+    }
 
     // otherwise the missing buttons just look like something is broken
     if (!window.showOpenFilePicker) {

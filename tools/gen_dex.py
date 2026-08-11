@@ -59,6 +59,21 @@ def move_id(name):
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
+def fix_text(value):
+    """Undo the double encoding in 160 of the move descriptions, where an
+    apostrophe reads as a-hat-euro-tm. The text was encoded as UTF-8 and then
+    read back as cp1252, so encoding it back to cp1252 and decoding as UTF-8
+    puts it right. Text that is already correct does not survive the round trip
+    and comes back untouched, so this can be applied to anything.
+    """
+    if not isinstance(value, str):
+        return value
+    try:
+        return value.encode("cp1252").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return value
+
+
 def display_name(name):
     for glyph, symbol in GENDER_DISPLAY.items():
         name = name.replace(glyph, symbol)
@@ -119,8 +134,8 @@ def build_payload(data_dir, key):
             "evo": entry.get("evo") or {},
             "learnset": entry.get("moves") or [],
             "tms": tms,
-            "notes": entry.get("notes") or [],
-            "changes": entry.get("changes") or [],
+            "notes": [fix_text(n) for n in (entry.get("notes") or [])],
+            "changes": [fix_text(c) for c in (entry.get("changes") or [])],
             "location": attrs.get("Location", ""),
             "sprite": "./img/pokesprite/%s.png" % slug(entry["name"]),
         })
@@ -162,12 +177,22 @@ def build_payload(data_dir, key):
             area_list.append({"name": area["name"], "wild": [],
                               "trainers": area["trainers"], "unplaced": True})
 
+    # the hack's own attack changes document, which is where the before and
+    # after live; moveInfo only carries a flag saying that a move was touched
+    changed = {move_id(e.get("name")): e.get("rows") or []
+               for e in (load(data_dir, "moves.json").get("attacks") or {}).get("entries", [])}
+
     move_list = []
     for key, m in moves.items():
-        move_list.append({"id": key, "name": m.get("n", ""), "type": m.get("t", ""),
-                          "cat": m.get("c", ""), "pow": m.get("pow", ""),
-                          "acc": m.get("acc", ""), "pp": m.get("pp", ""),
-                          "desc": m.get("d", "")})
+        entry = {"id": key, "name": m.get("n", ""), "type": m.get("t", ""),
+                 "cat": m.get("c", ""), "pow": m.get("pow", ""),
+                 "acc": m.get("acc", ""), "pp": m.get("pp", ""),
+                 "desc": fix_text(m.get("d", "")), "fx": fix_text(m.get("fx", ""))}
+        rows = changed.get(move_id(m.get("n")))
+        if m.get("chg") or rows:
+            entry["chg"] = True
+            entry["changes"] = rows or []
+        move_list.append(entry)
     move_list.sort(key=lambda m: m["name"])
 
     return {"species": species, "areas": area_list, "moves": move_list,
@@ -238,6 +263,11 @@ CHROME = r"""
  .dex-mv .lv { width:38px; color:#888; font-size:11px }
  .dex-icon { width:28px; height:28px; flex:0 0 28px; image-rendering:pixelated; margin:-4px 0 }
  .dex-tick { color:#6ec06e; font-size:11px; margin-left:5px }
+ .dex-tick.dead { color:#c98b8b }
+ .dex-chg { color:#e0b25a; border:1px solid #6b552a; background:#2e2718; border-radius:3px;
+            font-size:10px; padding:0 5px; margin-left:6px; text-transform:uppercase }
+ .dex-was { color:#a08585; text-decoration:line-through }
+ .dex-now { color:#7fc47f }
  .dex-row.done, .dex-mv.done, .done { color:#7d8b7d }
  .dex-mv .nm { flex:1 1 auto }
  .dex-mv .num { min-width:38px; text-align:right; color:#ccc; white-space:nowrap }
@@ -269,18 +299,33 @@ CHROME = r"""
     // route once where this data splits it in two, so "Route 104" marks off both
     // halves of Route 104; a prefix has to end on a word so that Route 10 does
     // not claim Route 103.
-    var caught = { species: {}, areas: {} };
+    var caught = { species: {}, areas: {}, dead: {}, deadAreas: {} };
 
-    function areaCaught(name) {
+    function matches(name, list) {
         var n = String(name).toLowerCase().trim();
-        return Object.keys(caught.areas).some(function (a) {
+        return Object.keys(list).some(function (a) {
             a = a.toLowerCase().trim();
             return n === a || n.indexOf(a + ' ') === 0 || n.indexOf(a + ' (') === 0;
         });
     }
 
-    function tick(on) {
-        return on ? '<span class="dex-tick" title="caught">&#10003;</span>' : '';
+    // A route is spent whether the Pokemon lived or died, so both mark it off;
+    // the dagger says which, and a later catch on the same route wins.
+    function areaState(name) {
+        if (matches(name, caught.areas)) return 'caught';
+        if (matches(name, caught.deadAreas)) return 'dead';
+        return '';
+    }
+
+    function tick(state) {
+        if (!state) return '';
+        return state === 'dead'
+            ? '<span class="dex-tick dead" title="lost here">&#10013;</span>'
+            : '<span class="dex-tick" title="caught">&#10003;</span>';
+    }
+
+    function monState(name) {
+        return caught.species[name] ? 'caught' : caught.dead[name] ? 'dead' : '';
     }
 
     function icon(name) {
@@ -341,8 +386,9 @@ CHROME = r"""
             });
         } else if (list === 'areas') {
             D.areas.forEach(function (a) {
+                if (!a.wild.length) return;         // this tab is the encounter list
                 if (!q || a.name.toLowerCase().indexOf(q) >= 0)
-                    out.push({ key: a.name, label: a.name, area: true, done: areaCaught(a.name) });
+                    out.push({ key: a.name, label: a.name, area: true, done: areaState(a.name) });
             });
         } else if (list === 'trainers') {
             // grouped under the area you meet them in, so the list reads in the
@@ -368,7 +414,7 @@ CHROME = r"""
         } else {
             D.moves.forEach(function (m) {
                 if (!q || m.name.toLowerCase().indexOf(q) >= 0)
-                    out.push({ key: m.id, label: m.name, move: true });
+                    out.push({ key: m.id, label: m.name, move: true, chg: m.chg });
             });
         }
         return out;
@@ -378,6 +424,8 @@ CHROME = r"""
         el('dex-list').innerHTML = rows().slice(0, 1600).map(function (r) {
             if (r.head) return '<div class="dex-head' + (r.sub ? ' sub' : '') + '">'
                              + esc(r.label) + '</div>';
+            if (r.chg) return '<div class="dex-row" data-key="' + esc(r.key) + '">' + esc(r.label)
+                            + '<span class="dex-chg" title="changed by this hack">changed</span></div>';
             return '<div class="dex-row' + (r.done ? ' done' : '') + '" data-key="' + esc(r.key) + '">'
                  + esc(r.label) + tick(r.done) + '</div>';
         }).join('');
@@ -415,8 +463,9 @@ CHROME = r"""
           + '<div class="dex-h">Found in</div>'
           + (where.length ? where.map(function (a) {
                 var w = a.wild.filter(function (x) { return x.name === sp.name });
-                return '<div style="font-size:13px;padding:2px 0"' + (areaCaught(a.name) ? ' class="done"' : '') + '>'
-                     + esc(a.name) + (areaCaught(a.name) ? ' ' + tick(true) : '')
+                var st = areaState(a.name);
+                return '<div style="font-size:13px;padding:2px 0"' + (st ? ' class="done"' : '') + '>'
+                     + esc(a.name) + tick(st)
                      + ' <span style="color:#888">' + esc(w.map(function (x) {
                            return x.method + (x.rate ? ' ' + x.rate + '%' : '')
                                 + ' Lv' + x.level + (x.rare ? ' *' : ''); }).join(', ')) + '</span></div>';
@@ -458,33 +507,27 @@ CHROME = r"""
         if (!a) return;
         var byMethod = {};
         a.wild.forEach(function (w) { (byMethod[w.method] = byMethod[w.method] || []).push(w) });
+        var state = areaState(a.name);
         el('dex-mid').innerHTML = '<div style="font-size:18px;color:#fff">' + esc(a.name)
-            + (areaCaught(a.name) ? ' <span class="dex-tick">&#10003; caught here</span>' : '') + '</div>'
+            + (state ? ' <span class="dex-tick' + (state === 'dead' ? ' dead' : '') + '">'
+                     + (state === 'dead' ? '&#10013; lost here' : '&#10003; caught here') + '</span>' : '')
+            + '</div>'
           + Object.keys(byMethod).map(function (m) {
               var rated = byMethod[m].some(function (w) { return w.rate });
               return '<div class="dex-h">' + esc(m)
                    + '<span style="float:right;color:#888;font-size:11px">'
                    + (rated ? 'Rate / Level' : 'Level') + '</span></div>'
                    + byMethod[m].map(function (w) {
-                  return '<div class="dex-mv' + (caught.species[w.name] ? ' done' : '') + '" '
+                  var st = monState(w.name);
+                  return '<div class="dex-mv' + (st ? ' done' : '') + '" '
                        + 'data-mon="' + esc(w.name) + '">'
                        + icon(w.name)
-                       + '<span class="nm">' + esc(w.name) + tick(caught.species[w.name]) + '</span>'
+                       + '<span class="nm">' + esc(w.name) + tick(st) + '</span>'
                        + (rated ? '<span class="num">' + (w.rate ? w.rate + '%' : '-') + '</span>' : '')
                        + '<span class="num">Lv' + esc(w.level) + '</span></div>';
               }).join('');
           }).join('');
-        el('dex-right').innerHTML = a.trainers.length
-          ? '<div class="dex-h">Trainers (' + a.trainers.length + ')</div>'
-              + a.trainers.map(function (t) {
-                  var tr = D.trainers[t];
-                  return '<div class="dex-mv" data-trainer="' + esc(t) + '">'
-                       + '<span class="nm">' + esc(tr.name) + '</span>'
-                       + '<span class="num">Lv' + esc(Math.max.apply(null, tr.team.map(function (m) {
-                             return m.level }))) + '</span></div>';
-              }).join('')
-          : '<div style="color:#888">No trainers here.</div>';
-
+        el('dex-right').innerHTML = '<div style="color:#888">Pick a Pokémon to see its moves.</div>';
         markSel(a.name, 'areas');
     }
 
@@ -562,11 +605,24 @@ CHROME = r"""
             return s.learnset.some(function (x) { return x.name === m.name })
                 || s.tms.some(function (t) { return t.name === m.name });
         });
-        el('dex-mid').innerHTML = '<div style="font-size:18px;color:#fff">' + esc(m.name) + '</div>'
+        el('dex-mid').innerHTML = '<div style="font-size:18px;color:#fff">' + esc(m.name)
+          + (m.chg ? '<span class="dex-chg">changed</span>' : '') + '</div>'
           + '<div style="margin-top:6px">' + (m.type ? typeTag(m.type) : '') + esc(m.cat) + '</div>'
           + '<div class="dex-h">Power ' + esc(m.pow || '-') + ' &nbsp; Accuracy ' + esc(m.acc || '-')
           + ' &nbsp; PP ' + esc(m.pp || '-') + '</div>'
-          + '<div style="font-size:13px;color:#bbb">' + esc(m.desc || '') + '</div>';
+          + (m.fx ? '<div style="font-size:13px;color:#bbb">' + esc(m.fx) + '</div>' : '')
+          + '<div style="font-size:13px;color:#bbb">' + esc(m.desc || '') + '</div>'
+          + ((m.changes && m.changes.length)
+                ? '<div class="dex-h">What changed</div>'
+                  + m.changes.map(function (c) {
+                        return '<div class="dex-mv"><span class="nm">' + esc(c.label) + '</span>'
+                             + '<span class="num dex-was">' + esc(c.from) + '</span>'
+                             + '<span class="num">&rarr;</span>'
+                             + '<span class="num dex-now">' + esc(c.to) + '</span></div>';
+                    }).join('')
+                : (m.chg ? '<div class="dex-h">What changed</div>'
+                         + '<div style="font-size:12px;color:#888">Marked as changed, without a listed before and after.</div>'
+                   : ''));
         el('dex-right').innerHTML = '<div class="dex-h">Learned by (' + learners.length + ')</div>'
           + learners.map(function (s) {
               return '<div class="dex-mv" data-mon="' + esc(s.name) + '">' + icon(s.name)
@@ -634,9 +690,11 @@ CHROME = r"""
             if (e.source !== window.parent) return;
             if (!e.data || e.data.dex !== 'caught') return;
 
-            caught = { species: {}, areas: {} };
+            caught = { species: {}, areas: {}, dead: {}, deadAreas: {} };
             (e.data.species || []).forEach(function (n) { caught.species[n] = true });
             (e.data.areas || []).forEach(function (n) { caught.areas[n] = true });
+            (e.data.dead || []).forEach(function (n) { caught.dead[n] = true });
+            (e.data.deadAreas || []).forEach(function (n) { caught.deadAreas[n] = true });
 
             renderList();                       // the marks live in both panes
             if (curKind && curKey) openEntry(curKind, curKey);
