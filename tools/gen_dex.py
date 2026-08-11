@@ -65,6 +65,32 @@ def display_name(name):
     return re.sub(r"\s+", " ", name).strip()
 
 
+def add_rates(rows):
+    """How often each wild encounter comes up, where that is knowable.
+
+    From the hack's own AreaChanges.txt: "Every area with grass/walking/sand etc
+    has at least 10 wild Pokemon, each having a 10% chance of appearing on any
+    encounter. Some areas have 11 Pokemon instead, in which case two will only
+    appear with a 5% rate. These 5% Pokemon are shown with an asterisk next to
+    their name." That asterisk is the rare flag on each row.
+
+    Applied only where a method's rates add up to exactly 100, which is 59 of
+    the 70 land groups. Surfing, fishing, hordes and DexNav follow slot rules
+    this data does not carry, and the odd land group is missing an asterisk. A
+    plausible looking percentage that is wrong is worse than no percentage.
+    """
+    groups = collections.defaultdict(list)
+    for row in rows:
+        groups[row["method"]].append(row)
+
+    for group in groups.values():
+        rates = [5 if row["rare"] else 10 for row in group]
+        if sum(rates) != 100:
+            continue
+        for row, rate in zip(group, rates):
+            row["rate"] = rate
+
+
 def build_payload(data_dir, key):
     poke = load(data_dir, "pokemon.json")
     moves = load(data_dir, "moves.json")["moveInfo"]
@@ -124,6 +150,8 @@ def build_payload(data_dir, key):
                 if s and s.get("name"):
                     rows.append({"name": s["name"], "method": wild.get("method", ""),
                                  "level": wild.get("level", ""), "rare": bool(s.get("rare"))})
+        add_rates(rows)
+
         roster = rosters.get(area["name"]) or {}
         if rows or roster.get("trainers"):
             area_list.append({"name": area["name"], "wild": rows,
@@ -208,8 +236,11 @@ CHROME = r"""
            font-size:13px; cursor:pointer }
  .dex-mv:hover { background:#2e2e2e }
  .dex-mv .lv { width:38px; color:#888; font-size:11px }
+ .dex-icon { width:28px; height:28px; flex:0 0 28px; image-rendering:pixelated; margin:-4px 0 }
+ .dex-tick { color:#6ec06e; font-size:11px; margin-left:5px }
+ .dex-row.done, .dex-mv.done, .done { color:#7d8b7d }
  .dex-mv .nm { flex:1 1 auto }
- .dex-mv .num { width:38px; text-align:right; color:#ccc }
+ .dex-mv .num { min-width:38px; text-align:right; color:#ccc; white-space:nowrap }
  .dex-h { color:#fff; font-weight:bold; margin:10px 0 4px; border-bottom:1px solid #333; padding-bottom:3px }
  .dex-head { padding:6px 8px 3px; color:#9a86b5; font-size:11px; text-transform:uppercase;
              letter-spacing:.5px; cursor:default; position:sticky; top:0; background:#232323 }
@@ -234,6 +265,31 @@ CHROME = r"""
     function el(id) { return document.getElementById(id) }
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] }) }
+    // What the calculator's save reader says you already have. The game names a
+    // route once where this data splits it in two, so "Route 104" marks off both
+    // halves of Route 104; a prefix has to end on a word so that Route 10 does
+    // not claim Route 103.
+    var caught = { species: {}, areas: {} };
+
+    function areaCaught(name) {
+        var n = String(name).toLowerCase().trim();
+        return Object.keys(caught.areas).some(function (a) {
+            a = a.toLowerCase().trim();
+            return n === a || n.indexOf(a + ' ') === 0 || n.indexOf(a + ' (') === 0;
+        });
+    }
+
+    function tick(on) {
+        return on ? '<span class="dex-tick" title="caught">&#10003;</span>' : '';
+    }
+
+    function icon(name) {
+        var sp = byName[name];
+        if (!sp) return '';
+        return '<img class="dex-icon" src="' + esc(sp.sprite) + '" alt="" '
+             + 'onerror="this.style.visibility=\'hidden\'">';
+    }
+
     function typeTag(t) {
         var c = D.types[String(t).toLowerCase()] || '#666';
         return '<span class="dex-type" style="background:' + c + '">' + esc(t) + '</span>';
@@ -286,7 +342,7 @@ CHROME = r"""
         } else if (list === 'areas') {
             D.areas.forEach(function (a) {
                 if (!q || a.name.toLowerCase().indexOf(q) >= 0)
-                    out.push({ key: a.name, label: a.name, area: true });
+                    out.push({ key: a.name, label: a.name, area: true, done: areaCaught(a.name) });
             });
         } else if (list === 'trainers') {
             // grouped under the area you meet them in, so the list reads in the
@@ -322,7 +378,8 @@ CHROME = r"""
         el('dex-list').innerHTML = rows().slice(0, 1600).map(function (r) {
             if (r.head) return '<div class="dex-head' + (r.sub ? ' sub' : '') + '">'
                              + esc(r.label) + '</div>';
-            return '<div class="dex-row" data-key="' + esc(r.key) + '">' + esc(r.label) + '</div>';
+            return '<div class="dex-row' + (r.done ? ' done' : '') + '" data-key="' + esc(r.key) + '">'
+                 + esc(r.label) + tick(r.done) + '</div>';
         }).join('');
     }
 
@@ -358,9 +415,11 @@ CHROME = r"""
           + '<div class="dex-h">Found in</div>'
           + (where.length ? where.map(function (a) {
                 var w = a.wild.filter(function (x) { return x.name === sp.name });
-                return '<div style="font-size:13px;padding:2px 0">' + esc(a.name)
+                return '<div style="font-size:13px;padding:2px 0"' + (areaCaught(a.name) ? ' class="done"' : '') + '>'
+                     + esc(a.name) + (areaCaught(a.name) ? ' ' + tick(true) : '')
                      + ' <span style="color:#888">' + esc(w.map(function (x) {
-                           return x.method + ' Lv' + x.level + (x.rare ? ' *' : ''); }).join(', ')) + '</span></div>';
+                           return x.method + (x.rate ? ' ' + x.rate + '%' : '')
+                                + ' Lv' + x.level + (x.rare ? ' *' : ''); }).join(', ')) + '</span></div>';
             }).join('') : '<span style="color:#888">Not found in the wild</span>')
           + (sp.notes && sp.notes.length ? '<div class="dex-h">Notes</div>'
                 + sp.notes.map(function (n) { return '<div style="font-size:12px;color:#bbb">' + esc(n) + '</div>' }).join('') : '');
@@ -399,11 +458,19 @@ CHROME = r"""
         if (!a) return;
         var byMethod = {};
         a.wild.forEach(function (w) { (byMethod[w.method] = byMethod[w.method] || []).push(w) });
-        el('dex-mid').innerHTML = '<div style="font-size:18px;color:#fff">' + esc(a.name) + '</div>'
+        el('dex-mid').innerHTML = '<div style="font-size:18px;color:#fff">' + esc(a.name)
+            + (areaCaught(a.name) ? ' <span class="dex-tick">&#10003; caught here</span>' : '') + '</div>'
           + Object.keys(byMethod).map(function (m) {
-              return '<div class="dex-h">' + esc(m) + '</div>' + byMethod[m].map(function (w) {
-                  return '<div class="dex-mv" data-mon="' + esc(w.name) + '">'
-                       + '<span class="nm">' + esc(w.name) + (w.rare ? ' *' : '') + '</span>'
+              var rated = byMethod[m].some(function (w) { return w.rate });
+              return '<div class="dex-h">' + esc(m)
+                   + '<span style="float:right;color:#888;font-size:11px">'
+                   + (rated ? 'Rate / Level' : 'Level') + '</span></div>'
+                   + byMethod[m].map(function (w) {
+                  return '<div class="dex-mv' + (caught.species[w.name] ? ' done' : '') + '" '
+                       + 'data-mon="' + esc(w.name) + '">'
+                       + icon(w.name)
+                       + '<span class="nm">' + esc(w.name) + tick(caught.species[w.name]) + '</span>'
+                       + (rated ? '<span class="num">' + (w.rate ? w.rate + '%' : '-') + '</span>' : '')
                        + '<span class="num">Lv' + esc(w.level) + '</span></div>';
               }).join('');
           }).join('');
@@ -502,7 +569,8 @@ CHROME = r"""
           + '<div style="font-size:13px;color:#bbb">' + esc(m.desc || '') + '</div>';
         el('dex-right').innerHTML = '<div class="dex-h">Learned by (' + learners.length + ')</div>'
           + learners.map(function (s) {
-              return '<div class="dex-mv" data-mon="' + esc(s.name) + '"><span class="nm">' + esc(s.name) + '</span></div>';
+              return '<div class="dex-mv" data-mon="' + esc(s.name) + '">' + icon(s.name)
+                   + '<span class="nm">' + esc(s.name) + '</span></div>';
           }).join('');
 
         markSel(id, 'moves');
@@ -560,6 +628,21 @@ CHROME = r"""
         var mv = e.target.closest && e.target.closest('[data-move]');
         if (mv && mv.getAttribute('data-move')) showMove(mv.getAttribute('data-move'));
     });
+
+    if (embedded) {
+        window.addEventListener('message', function (e) {
+            if (e.source !== window.parent) return;
+            if (!e.data || e.data.dex !== 'caught') return;
+
+            caught = { species: {}, areas: {} };
+            (e.data.species || []).forEach(function (n) { caught.species[n] = true });
+            (e.data.areas || []).forEach(function (n) { caught.areas[n] = true });
+
+            renderList();                       // the marks live in both panes
+            if (curKind && curKey) openEntry(curKind, curKey);
+        });
+        tellParent({ dex: 'ready' });
+    }
 
     el('dex-title').textContent = window.DEX_TITLE || 'Dex';
 

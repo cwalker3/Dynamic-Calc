@@ -66,6 +66,11 @@ g6Base = 0              // start of the save inside the uploaded file
 g6PartyMons = {}        // display name -> index into g6Party
 g6Party = []            // { offset, dec, species, growth }
 g6BoxMons = {}          // display name -> { offset, dec, species, growth }
+
+// What the save says you already have, and where you caught it. The dex marks
+// its encounter lists off with this, which is the whole point of a nuzlocke
+// route list: knowing which routes you have already used up.
+g6Caught = { species: {}, areas: {} }
 g6File = null           // retained File, re-read by the sync button
 g6FileHandle = null     // FileSystemFileHandle when the browser supports it
 g6DirHandle = null      // save folder, granted once so writes can go back in place
@@ -270,6 +275,10 @@ function g6ParsePKM(bytes, offset, isParty) {
         (iv32 >>> 15) & 0x1F
     ]
 
+    const met = g6MetLocation(g6ReadU16(dec, 0xDA))
+    g6Caught.species[name] = true
+    if (met && met != "Unknown") g6Caught.areas[met] = true
+
     const entry = { offset: offset, dec: dec, species: species, growth: g6_growths[species] || 0 }
     if (isParty) {
         g6PartyMons[name] = g6Party.length
@@ -296,7 +305,7 @@ function g6ParsePKM(bytes, offset, isParty) {
         text += `- ${g6_moves[g6ReadU16(dec, 0x5A + (i * 2))] || "(No Move)"}\n`
     }
 
-    text += `Met: ${g6MetLocation(g6ReadU16(dec, 0xDA))}\n\n`
+    text += `Met: ${met}\n\n`
     return text
 }
 
@@ -325,6 +334,7 @@ function g6ReadSave(buffer, fileName, quiet) {
     g6PartyMons = {}
     g6Party = []
     g6BoxMons = {}
+    g6Caught = { species: {}, areas: {} }
     currentParty = []
 
     const partyOffset = g6Base + g6Layout.party.offset
@@ -362,6 +372,10 @@ function g6ReadSave(buffer, fileName, quiet) {
     $('#changelog').html(changelog).show()
 
     g6AddSyncBtn()
+
+    // the dex marks its route lists off with this, and auto sync means it can
+    // change while the dex is sitting open
+    if (window.sendCaughtToDex) sendCaughtToDex()
     return true
 }
 

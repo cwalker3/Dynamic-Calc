@@ -835,6 +835,7 @@ function openDex(url) {
             const msg = e.originalEvent
             if (msg.source !== frame[0].contentWindow) return
 
+            if (msg.data && msg.data.dex == "ready") sendCaughtToDex()
             if (msg.data && msg.data.dex == "close") closeDex()
             if (msg.data && msg.data.dex == "set") {
                 closeDex()
@@ -876,6 +877,20 @@ function markView(view) {
 
     const query = params.toString()
     history.replaceState({}, document.title, location.pathname + (query ? "?" + query : ""))
+}
+
+// What the loaded save says you already have, handed to the dex so it can mark
+// its route lists off. Sent when the dex asks on open and again on every sync,
+// since the save can change underneath a dex that is sitting open.
+function sendCaughtToDex() {
+    const frame = $("#dex-frame")
+    if (!frame.length || typeof g6Caught == "undefined") return
+
+    frame[0].contentWindow.postMessage({
+        dex: "caught",
+        species: Object.keys(g6Caught.species),
+        areas: Object.keys(g6Caught.areas)
+    }, "*")
 }
 
 // A trainer picked in the dex arrives here as a set name in localStorage, since
