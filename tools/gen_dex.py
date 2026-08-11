@@ -80,6 +80,51 @@ def display_name(name):
     return re.sub(r"\s+", " ", name).strip()
 
 
+# Which of the two runs a trainer belongs to, which rival they are, and which
+# starter choice puts them in front of you. The rom holds every combination at
+# once; a given save only ever meets one of each.
+STARTER_LINES = {
+    "treecko": ("Treecko", "Grovyle", "Sceptile"),
+    "torchic": ("Torchic", "Combusken", "Blaziken"),
+    "mudkip": ("Mudkip", "Marshtomp", "Swampert"),
+}
+
+# In R/S/E and ORAS the rival takes the starter yours is strong against, so the
+# rival holding Mudkip is the one you meet after choosing Treecko.
+RIVAL_TO_PLAYER = {"mudkip": "treecko", "treecko": "torchic", "torchic": "mudkip"}
+
+
+def run_tags(name, team):
+    """Which side, which rival, and the starter choice that summons them.
+
+    Keyed "side" rather than "team", which a trainer already uses for the six
+    Pokemon they field.
+    """
+    tags = {}
+    lower = name.lower()
+
+    if "aqua" in lower:
+        tags["side"] = "aqua"
+    elif "magma" in lower:
+        tags["side"] = "magma"
+
+    # Brendan and May are the same battles twice over: you play one, you fight
+    # the other, and no save ever sees both.
+    if "brendan" in lower:
+        tags["rival"] = "brendan"
+    elif re.search(r"\bmay\d*\s*$", lower):
+        tags["rival"] = "may"
+
+    if "rival" in tags:
+        for member in team:
+            species = member["species"].split("-")[0]
+            for line, members in STARTER_LINES.items():
+                if species in members:
+                    tags["starter"] = RIVAL_TO_PLAYER[line]
+                    return tags
+    return tags
+
+
 def is_gym(name):
     """The eight gyms, so the trainer list can pick them out of the routes.
 
@@ -159,13 +204,14 @@ def build_payload(data_dir, key):
     for area in by_area:
         area["trainers"] = [n for n in area["trainers"] if n in trainers]
 
-    for entry in trainers.values():
+    for name, entry in trainers.items():
+        entry.update(run_tags(name, entry["team"]))
         entry["name"] = display_name(entry["name"])
-    rosters = {a["name"]: a for a in by_area}
+    rosters = {a["index"]: a for a in by_area if "index" in a}
 
     # what each area holds, wild and trained, in the order you walk them
     area_list = []
-    for area in areas:
+    for index, area in enumerate(areas):
         rows = []
         for wild in (area.get("wild") or []):
             sp = wild.get("species")
@@ -176,7 +222,7 @@ def build_payload(data_dir, key):
                                  "level": wild.get("level", ""), "rare": bool(s.get("rare"))})
         add_rates(rows)
 
-        roster = rosters.get(area["name"]) or {}
+        roster = rosters.get(index) or {}
         if rows or roster.get("trainers"):
             area_list.append({"name": area["name"], "wild": rows,
                               "trainers": roster.get("trainers") or [],
@@ -228,6 +274,24 @@ CHROME = r"""
         <a class="dex-sub" data-list="trainers" href="#">Trainers</a>
         <a class="dex-sub" data-list="moves" href="#">Moves</a>
       </div>
+      <div id="dex-run">
+        <select id="dex-version">
+          <option value="">Both versions</option>
+          <option value="magma">Rising Ruby &middot; Magma</option>
+          <option value="aqua">Sinking Sapphire &middot; Aqua</option>
+        </select>
+        <select id="dex-player">
+          <option value="">Either player</option>
+          <option value="may">Playing the boy &middot; rival May</option>
+          <option value="brendan">Playing the girl &middot; rival Brendan</option>
+        </select>
+        <select id="dex-starter">
+          <option value="">Any starter</option>
+          <option value="treecko">You chose Treecko</option>
+          <option value="torchic">You chose Torchic</option>
+          <option value="mudkip">You chose Mudkip</option>
+        </select>
+      </div>
       <input id="dex-search" placeholder="Search">
       <div id="dex-list"></div>
     </div>
@@ -252,6 +316,10 @@ CHROME = r"""
  .dex-subtabs { display:flex; gap:4px; margin-bottom:6px }
  #dex-search { width:100%; box-sizing:border-box; margin-bottom:6px; padding:5px 8px;
                background:#1b1b1b; color:#ddd; border:1px solid #444; border-radius:4px }
+ #dex-run { display:none; margin-bottom:6px }
+ #dex-run select { width:100%; box-sizing:border-box; margin-bottom:4px; padding:4px 6px;
+                   background:#1b1b1b; color:#bbb; border:1px solid #444; border-radius:4px;
+                   font-size:11px }
  #dex-list { flex:1 1 auto; overflow-y:auto; min-height:0 }
  .dex-row { padding:5px 8px; border-bottom:1px solid #2c2c2c; cursor:pointer; font-size:13px }
  .dex-row:hover { background:#2e2e2e }
@@ -308,6 +376,18 @@ CHROME = r"""
 (function () {
     var D = window.DEX_DATA, cur = null, list = 'mons', curKey = null, curKind = 'mons';
     var expanded = {};              // which areas are open on the trainer list
+
+    // Which run you are actually playing. The rom holds both versions, both
+    // rivals and all three starter branches at once, and a save only ever meets
+    // one of each, so the rest is noise on a route list.
+    var run = { side: '', rival: '', starter: '' };
+
+    function inRun(t) {
+        if (run.side && t.side && t.side !== run.side) return false;
+        if (run.rival && t.rival && t.rival !== run.rival) return false;
+        if (run.starter && t.starter && t.starter !== run.starter) return false;
+        return true;
+    }
     var byName = {}; D.species.forEach(function (s) { byName[s.name] = s });
 
     function el(id) { return document.getElementById(id) }
@@ -384,7 +464,7 @@ CHROME = r"""
     function remember() {
         try {
             localStorage.setItem(STORE, JSON.stringify({
-                list: list, kind: curKind, sel: curKey,
+                list: list, kind: curKind, sel: curKey, run: run,
                 q: el('dex-search').value, scroll: el('dex-list').scrollTop
             }));
         } catch (e) { }
@@ -417,6 +497,7 @@ CHROME = r"""
                 if (!a.trainers.length) return;
                 var areaHit = !q || a.name.toLowerCase().indexOf(q) >= 0;
                 var hit = a.trainers.filter(function (t) {
+                    if (!inRun(D.trainers[t])) return false;
                     return areaHit || D.trainers[t].name.toLowerCase().indexOf(q) >= 0;
                 });
                 if (!hit.length) return;
@@ -689,6 +770,7 @@ CHROME = r"""
         });
         if (!keepSearch) el('dex-search').value = '';
         el('dex-search').placeholder = PLACEHOLDERS[name] || 'Search';
+        el('dex-run').style.display = name === 'trainers' ? 'block' : 'none';
         renderList();
         remember();
     }
@@ -697,6 +779,16 @@ CHROME = r"""
         t.addEventListener('click', function (e) {
             e.preventDefault();
             setList(t.getAttribute('data-list'));
+        });
+    });
+
+    var RUN_FIELDS = { 'dex-version': 'side', 'dex-player': 'rival', 'dex-starter': 'starter' };
+
+    Object.keys(RUN_FIELDS).forEach(function (id) {
+        el(id).addEventListener('change', function () {
+            run[RUN_FIELDS[id]] = el(id).value;
+            renderList();
+            remember();
         });
     });
 
@@ -762,6 +854,13 @@ CHROME = r"""
     // An explicit ?list=trainers&sel=Youngster Calvin wins, so a view can still
     // be linked to. Otherwise pick up where this browser left off, which is what
     // makes the trip to the calculator and back free.
+    // the run is yours whatever you are looking at, so it survives a deep link
+    var remembered = recall();
+    if (remembered && remembered.run) {
+        run = remembered.run;
+        Object.keys(RUN_FIELDS).forEach(function (id) { el(id).value = run[RUN_FIELDS[id]] || '' });
+    }
+
     var want = /[?&]list=([^&]*)/.exec(location.search);
     var sel = /[?&]sel=([^&]*)/.exec(location.search);
     var saved = (want || sel) ? null : recall();

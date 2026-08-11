@@ -147,7 +147,7 @@ def build_trainers(key, areas):
 
     taken, by_area = set(), []
     placement = {}
-    for area in areas:
+    for index, area in enumerate(areas):
         rows = []
         for roster in (area.get("rosters") or []):
             title = roster.get("title") or "Trainers"
@@ -169,7 +169,10 @@ def build_trainers(key, areas):
                 placement[best] = {"area": area["name"], "roster": title,
                                    "rematch": roster.get("kind") == "rematch"}
         if rows:
-            by_area.append({"name": area["name"], "trainers": rows})
+            # carrying the index, because names repeat: areas.json lists Magma
+            # Hideout, Aqua Hideout and the Pokemon League twice each, and a
+            # lookup by name hands the second one's trainers to both
+            by_area.append({"name": area["name"], "index": index, "trainers": rows})
 
     # Everything the doc site does not place: rematches beyond the appearances
     # it lists, and the unnamed "[~ N]" rom slots. Kept rather than dropped,
