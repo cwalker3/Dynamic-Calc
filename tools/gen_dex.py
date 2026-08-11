@@ -263,10 +263,12 @@ CHROME = r"""
 <div id="dex-open" title="Open the dex">Dex</div>
 <div id="dex-overlay">
   <div id="dex-bar">
+    <span id="view-tabs">
+      <a class="view-tab" id="dex-close" href="#">Calculator</a>
+      <a class="view-tab active" href="#">Dex</a>
+      <a class="view-tab" id="dex-back" href="#"></a>
+    </span>
     <span id="dex-title"></span>
-    <a class="dex-tab" id="dex-back" href="#"></a>
-    <a class="dex-tab" id="dex-close" href="#">Calculator</a>
-    <a class="dex-tab active" href="#">Dex</a>
   </div>
   <div id="dex-body">
     <div id="dex-left">
@@ -305,15 +307,29 @@ CHROME = r"""
  #dex-open { display:none }
  #dex-overlay { display:flex; position:fixed; inset:0; z-index:10000; background:#1b1b1b; color:#ddd;
                 font-family:inherit; flex-direction:column }
- #dex-bar { flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:8px 12px;
-            background:#111; border-bottom:1px solid #333 }
- #dex-title { font-weight:bold; font-size:15px; margin-right:12px; color:#fff }
- .dex-tab, .dex-sub { color:#bbb; background:#2b2b2b; border:1px solid #444; border-radius:4px;
-                      padding:4px 12px; text-decoration:none; font-size:13px }
- .dex-sub { padding:4px 7px; font-size:12px }
- .dex-tab.active, .dex-sub.active { color:#fff; background:#4a3a5a; border-color:#8a6aaa }
- #dex-back { display:none; margin-right:auto; max-width:280px; overflow:hidden;
-             text-overflow:ellipsis; white-space:nowrap }
+ /* The header is the calculator's, to the pixel: same tab strip at the same
+    offset and the same title centred over it, so switching views moves nothing
+    on screen. Copied from #view-tabs and #rom-title in css/main.css, which this
+    page cannot load, since it is standalone by design. */
+ /* Verdana at a 40px line height is where the calculator's header gets its
+    size; the same rules in the system font came out 21px shorter and sat 20px
+    high. The offsets are the calculator's measured ones rather than its
+    stylesheet's, since its tabs hang off a container that is itself inset. */
+ #dex-bar { flex:0 0 auto; position:relative; height:96px }
+ #view-tabs { position:absolute; left:102px; top:32px; z-index:5; white-space:nowrap }
+ #view-tabs .view-tab { display:inline-block; color:#bbb; background:#2b2b2b;
+                        border:1px solid #444; border-radius:6px; padding:7px 15px;
+                        margin-right:4px; text-decoration:none;
+                        font-family:Verdana,Geneva,sans-serif; font-size:14px; line-height:40px }
+ #view-tabs .view-tab.active { color:#fff; background:#4a3a5a; border-color:#8a6aaa }
+ #view-tabs .view-tab:hover { color:#fff }
+ #view-tabs #dex-back { display:none; max-width:240px; overflow:hidden; text-overflow:ellipsis }
+ #dex-title { position:absolute; left:calc(50% - 300px); top:25px; width:600px;
+              text-align:center; font-family:Verdana,Geneva,sans-serif;
+              font-size:30px; line-height:40px; color:#f8f8f2 }
+ .dex-sub { color:#bbb; background:#2b2b2b; border:1px solid #444; border-radius:4px;
+            padding:4px 7px; text-decoration:none; font-size:12px }
+ .dex-sub.active { color:#fff; background:#4a3a5a; border-color:#8a6aaa }
  #dex-body { flex:1 1 auto; display:flex; gap:10px; padding:10px; min-height:0 }
  #dex-left { flex:0 0 260px; display:flex; flex-direction:column; min-height:0;
              background:#232323; border:1px solid #333; border-radius:6px; padding:8px }
@@ -881,7 +897,10 @@ CHROME = r"""
         tellParent({ dex: 'ready' });
     }
 
-    el('dex-title').textContent = window.DEX_TITLE || 'Dex';
+    // the tab already says Dex, and repeating it here would leave the title
+    // wider than the calculator's and shifting on every switch
+    el('dex-title').textContent = window.DEX_HEADING || window.DEX_TITLE || 'Dex';
+    drawBack();     // sets the inline display, whichever way the trail starts
 
     var LISTS = ['mons', 'areas', 'trainers', 'moves'];
 
@@ -948,10 +967,10 @@ def build(key, title, data_dir):
 <style>html,body{margin:0;padding:0;background:#1b1b1b;color:#ddd;
  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}</style>
 </head><body>
-<script>window.DEX_TITLE = %s; window.DEX_DATA = %s;</script>
+<script>window.DEX_TITLE = %s; window.DEX_HEADING = %s; window.DEX_DATA = %s;</script>
 %s
 </body></html>
-""" % (esc(title + " Dex"), json.dumps(title + " Dex"),
+""" % (esc(title + " Dex"), json.dumps(title + " Dex"), json.dumps(title),
        json.dumps(payload, ensure_ascii=False), CHROME)
 
     dest = os.path.join(REPO, "%s_mastersheet.html" % key)
