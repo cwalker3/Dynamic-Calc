@@ -2032,9 +2032,13 @@ table.field {
    placed in normal flow end up underneath it. */
 #view-tabs {
     display: none;
-    position: absolute;
-    left: 92px;
-    top: 12px;
+    /* Fixed, and at the offsets it actually lands on rather than the ones it
+       used to be given: absolute meant the strip scrolled away with the page,
+       while the dex sits in a fixed overlay and keeps its own at the top, so
+       the tabs jumped whenever you switched views part way down. */
+    position: fixed;
+    left: 102px;
+    top: 32px;
     z-index: 5;
     white-space: nowrap;
 }
