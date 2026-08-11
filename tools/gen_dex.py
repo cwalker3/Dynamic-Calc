@@ -80,6 +80,15 @@ def display_name(name):
     return re.sub(r"\s+", " ", name).strip()
 
 
+def is_gym(name):
+    """The eight gyms, so the trainer list can pick them out of the routes.
+
+    Matched on the name because that is all there is: nothing in the data says
+    which areas are the ones you have to beat.
+    """
+    return name.strip().lower().endswith(" gym")
+
+
 def add_rates(rows):
     """How often each wild encounter comes up, where that is knowable.
 
@@ -170,7 +179,8 @@ def build_payload(data_dir, key):
         roster = rosters.get(area["name"]) or {}
         if rows or roster.get("trainers"):
             area_list.append({"name": area["name"], "wild": rows,
-                              "trainers": roster.get("trainers") or []})
+                              "trainers": roster.get("trainers") or [],
+                              "gym": is_gym(area["name"])})
 
     for area in by_area:                       # the unplaced tail has no wild rows
         if area.get("unplaced"):
@@ -248,6 +258,9 @@ CHROME = r"""
  .dex-row.sel { background:#3a2f4a }
  .dex-row.group { display:flex; align-items:center; gap:6px; color:#cfc3dd }
  .dex-row.group .caret { color:#9a8aaa; font-size:12px; width:11px; line-height:1 }
+ .dex-row.group.gym { color:#e6c264; font-weight:bold }
+ .dex-row.group.gym .caret { color:#b08a2e }
+ .dex-row.group.gym .dex-count { color:#9a7f3c }
  .dex-row.child { padding-left:24px }
  .dex-count { margin-left:auto; color:#777; font-size:11px }
  #dex-mid { flex:1 1 40%; overflow-y:auto; min-height:0; background:#232323;
@@ -409,7 +422,8 @@ CHROME = r"""
                 if (!hit.length) return;
 
                 var open = q ? true : !!expanded[a.name];
-                out.push({ key: a.name, label: a.name, group: true, open: open, count: hit.length });
+                out.push({ key: a.name, label: a.name, group: true, open: open,
+                           count: hit.length, gym: a.gym });
                 if (open) hit.forEach(function (t) {
                     out.push({ key: t, label: D.trainers[t].name, child: true });
                 });
@@ -429,7 +443,8 @@ CHROME = r"""
                              + esc(r.label) + '</div>';
             if (r.chg) return '<div class="dex-row" data-key="' + esc(r.key) + '">' + esc(r.label)
                             + '<span class="dex-chg" title="changed by this hack">changed</span></div>';
-            if (r.group) return '<div class="dex-row group" data-group="' + esc(r.key) + '">'
+            if (r.group) return '<div class="dex-row group' + (r.gym ? ' gym' : '') + '" '
+                             + 'data-group="' + esc(r.key) + '">'
                              + '<span class="caret">' + (r.open ? '&#9662;' : '&#9656;') + '</span>'
                              + esc(r.label) + '<span class="dex-count">' + r.count + '</span></div>';
             if (r.child) return '<div class="dex-row child" data-key="' + esc(r.key) + '">'
