@@ -246,6 +246,10 @@ CHROME = r"""
  .dex-row { padding:5px 8px; border-bottom:1px solid #2c2c2c; cursor:pointer; font-size:13px }
  .dex-row:hover { background:#2e2e2e }
  .dex-row.sel { background:#3a2f4a }
+ .dex-row.group { display:flex; align-items:center; gap:6px; color:#cfc3dd }
+ .dex-row.group .caret { color:#9a8aaa; font-size:12px; width:11px; line-height:1 }
+ .dex-row.child { padding-left:24px }
+ .dex-count { margin-left:auto; color:#777; font-size:11px }
  #dex-mid { flex:1 1 40%; overflow-y:auto; min-height:0; background:#232323;
             border:1px solid #333; border-radius:6px; padding:12px }
  #dex-right { flex:1 1 40%; overflow-y:auto; min-height:0; background:#232323;
@@ -290,6 +294,7 @@ CHROME = r"""
 <script>
 (function () {
     var D = window.DEX_DATA, cur = null, list = 'mons', curKey = null, curKind = 'mons';
+    var expanded = {};              // which areas are open on the trainer list
     var byName = {}; D.species.forEach(function (s) { byName[s.name] = s });
 
     function el(id) { return document.getElementById(id) }
@@ -391,24 +396,22 @@ CHROME = r"""
                     out.push({ key: a.name, label: a.name, area: true, done: areaState(a.name) });
             });
         } else if (list === 'trainers') {
-            // grouped under the area you meet them in, so the list reads in the
-            // order you play; a search on an area name keeps that area whole
+            // Areas in the order you play them, closed until you ask. Listing
+            // every trainer at once is 725 rows to scroll past. A search opens
+            // whatever survives it, so typing either an area or a trainer name
+            // gets you straight there.
             D.areas.forEach(function (a) {
-                var area = !q || a.name.toLowerCase().indexOf(q) >= 0;
+                if (!a.trainers.length) return;
+                var areaHit = !q || a.name.toLowerCase().indexOf(q) >= 0;
                 var hit = a.trainers.filter(function (t) {
-                    return area || D.trainers[t].name.toLowerCase().indexOf(q) >= 0;
+                    return areaHit || D.trainers[t].name.toLowerCase().indexOf(q) >= 0;
                 });
                 if (!hit.length) return;
-                out.push({ key: a.name, label: a.name, head: true });
-                var roster = 'Trainers';
-                hit.forEach(function (t) {
-                    // the doc site keeps a route's rematch tiers in their own
-                    // roster, and without the divider they read as duplicates
-                    if (D.trainers[t].roster && D.trainers[t].roster !== roster) {
-                        roster = D.trainers[t].roster;
-                        out.push({ key: a.name + '/' + roster, label: roster, head: true, sub: true });
-                    }
-                    out.push({ key: t, label: D.trainers[t].name });
+
+                var open = q ? true : !!expanded[a.name];
+                out.push({ key: a.name, label: a.name, group: true, open: open, count: hit.length });
+                if (open) hit.forEach(function (t) {
+                    out.push({ key: t, label: D.trainers[t].name, child: true });
                 });
             });
         } else {
@@ -426,6 +429,11 @@ CHROME = r"""
                              + esc(r.label) + '</div>';
             if (r.chg) return '<div class="dex-row" data-key="' + esc(r.key) + '">' + esc(r.label)
                             + '<span class="dex-chg" title="changed by this hack">changed</span></div>';
+            if (r.group) return '<div class="dex-row group" data-group="' + esc(r.key) + '">'
+                             + '<span class="caret">' + (r.open ? '&#9662;' : '&#9656;') + '</span>'
+                             + esc(r.label) + '<span class="dex-count">' + r.count + '</span></div>';
+            if (r.child) return '<div class="dex-row child" data-key="' + esc(r.key) + '">'
+                             + esc(r.label) + '</div>';
             return '<div class="dex-row' + (r.done ? ' done' : '') + '" data-key="' + esc(r.key) + '">'
                  + esc(r.label) + tick(r.done) + '</div>';
         }).join('');
@@ -542,6 +550,13 @@ CHROME = r"""
     function showTrainer(key) {
         var t = D.trainers[key];
         if (!t) return;
+        // opened from anywhere - a deep link, a restored spot, the area view -
+        // the list has to open too, or the selected trainer sits inside a
+        // collapsed area with nothing to show for it
+        if (!expanded[t.area]) {
+            expanded[t.area] = true;
+            renderList();
+        }
 
         el('dex-mid').innerHTML =
             '<div style="font-size:18px;color:#fff">' + esc(t.name)
@@ -647,12 +662,18 @@ CHROME = r"""
         scrollTimer = setTimeout(remember, 200);
     });
 
+    var PLACEHOLDERS = {
+        mons: 'Search a Pokémon or type', areas: 'Search an area',
+        trainers: 'Search an area or trainer', moves: 'Search a move'
+    };
+
     function setList(name, keepSearch) {
         list = name;
         Array.prototype.forEach.call(document.querySelectorAll('.dex-sub'), function (x) {
             x.classList.toggle('active', x.getAttribute('data-list') === name);
         });
         if (!keepSearch) el('dex-search').value = '';
+        el('dex-search').placeholder = PLACEHOLDERS[name] || 'Search';
         renderList();
         remember();
     }
@@ -667,6 +688,14 @@ CHROME = r"""
     document.addEventListener('click', function (e) {
         var open = e.target.closest && e.target.closest('#dex-open-calc');
         if (open) { e.preventDefault(); openInCalc(open.getAttribute('data-set')); return }
+
+        var group = e.target.closest && e.target.closest('.dex-row[data-group]');
+        if (group) {
+            var area = group.getAttribute('data-group');
+            expanded[area] = !expanded[area];
+            renderList();
+            return;
+        }
 
         var row = e.target.closest && e.target.closest('.dex-row');
         if (row) {
@@ -727,6 +756,7 @@ CHROME = r"""
     } else if (saved && LISTS.indexOf(saved.list) >= 0) {
         el('dex-search').value = saved.q || '';
         setList(saved.list, true);
+        el('dex-search').placeholder = PLACEHOLDERS[saved.list] || 'Search';
     } else {
         renderList();
     }
