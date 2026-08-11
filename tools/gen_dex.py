@@ -89,9 +89,11 @@ STARTER_LINES = {
     "mudkip": ("Mudkip", "Marshtomp", "Swampert"),
 }
 
-# In R/S/E and ORAS the rival takes the starter yours is strong against, so the
-# rival holding Mudkip is the one you meet after choosing Treecko.
-RIVAL_TO_PLAYER = {"mudkip": "treecko", "treecko": "torchic", "torchic": "mudkip"}
+# The rival mirrors your starter here: choose Mudkip and May turns up with
+# Mudkip. That is from playing this hack, not the vanilla rule, where the rival
+# takes the starter yours is strong against. It also fits the rom's own
+# ordering, which lists Treecko, Torchic then Mudkip at every rival battle,
+# indexed by the choice you made rather than by what the rival ends up holding.
 
 
 def run_tags(name, team):
@@ -120,7 +122,7 @@ def run_tags(name, team):
             species = member["species"].split("-")[0]
             for line, members in STARTER_LINES.items():
                 if species in members:
-                    tags["starter"] = RIVAL_TO_PLAYER[line]
+                    tags["starter"] = line
                     return tags
     return tags
 
