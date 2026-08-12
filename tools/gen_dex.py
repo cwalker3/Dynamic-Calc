@@ -360,6 +360,7 @@ CHROME = r"""
  .dex-statrow { display:flex; align-items:center; gap:8px; margin:2px 0; font-size:13px }
  .dex-statrow b { width:64px; display:inline-block; font-weight:normal; color:#aaa }
  .dex-statnum { width:34px; text-align:right }
+ .dex-delta { width:30px; display:inline-block; text-align:right; font-size:12px }
  .dex-bar { height:9px; border-radius:2px; background:#6a9955 }
  .dex-up { color:#6ec06e } .dex-down { color:#d16a6a }
  .dex-mv { display:flex; align-items:center; gap:8px; padding:4px 6px; border-bottom:1px solid #2c2c2c;
@@ -588,7 +589,19 @@ CHROME = r"""
 
     function statBar(label, value, chg) {
         var pct = Math.max(2, Math.min(100, value / 255 * 100));
-        var mark = chg ? ' <span class="' + (chg > 0 ? 'dex-up">+' : 'dex-down">') + chg + '</span>' : '';
+
+        // The doc site gives a change as where the stat came from and where it
+        // went, not as a delta, so a bare chg here printed [object Object].
+        // always drawn, even when nothing changed, or the bars on a Pokemon
+        // with only some stats touched start at two different places
+        var mark = '<span class="dex-delta"></span>';
+        if (chg && chg.from != null && chg.from !== value) {
+            var delta = value - chg.from;
+            mark = '<span class="dex-delta ' + (delta > 0 ? 'dex-up' : 'dex-down')
+                 + '" title="was ' + esc(chg.from) + '">'
+                 + (delta > 0 ? '+' : '') + delta + '</span>';
+        }
+
         return '<div class="dex-statrow"><b>' + label + '</b>'
              + '<span class="dex-statnum">' + value + '</span>' + mark
              + '<span class="dex-bar" style="width:' + pct + '%"></span></div>';
