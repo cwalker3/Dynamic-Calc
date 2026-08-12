@@ -88,6 +88,7 @@ g6BackupDirHandle = null // folder auto backups are dropped into, when enabled
 // Brave defines the pickers but blocks the call, so feature detection alone is
 // not enough: this records that a picker actually threw when we tried it
 g6PickerBlocked = false
+g6PickerHintShown = false
 
 G6_AUTO_SYNC_MS = 3000
 // distinctive enough that pruning can never touch a file the calc did not write
@@ -772,6 +773,25 @@ function g6CanAutoSync() {
 
 // The pickers existing does not mean they work, so anything that depends on a
 // handle also has to respect a picker we have already seen refuse.
+// Shown once, the first time the picker closes without a file. Citra's default
+// save folder is under AppData, which Chromium refuses to open through the file
+// picker, and the message it gives says system files rather than anything about
+// the folder being off limits to this page.
+function g6ExplainPickerLimits() {
+    if (g6PickerHintShown) return
+    g6PickerHintShown = true
+
+    changelog += `<p>If the picker refused the folder, saying it holds system files: Citra keeps saves `
+        + `under AppData, which browsers will not open this way. Use Upload Save instead, which is not `
+        + `restricted. Auto sync and writing back need the picker, so for those, run Citra in portable `
+        + `mode or copy the save folder somewhere like Documents first. `
+        + `Brave blocks the picker outright until you enable "File System Access API" at `
+        + `brave://flags/#file-system-access-api and relaunch.</p>`
+
+    if ($('#changelog').length == 0) $('#clearSets').after("<p id='changelog'></p>")
+    $('#changelog').html(changelog).show()
+}
+
 function g6HandlesUsable() {
     return !!window.showDirectoryPicker && !g6PickerBlocked
 }
@@ -951,6 +971,8 @@ function g6Init() {
         return
     }
 
+    g6AddUploadButton()
+
     $('#read-save').on('click', async function (event) {
         event.preventDefault()
         try {
@@ -963,7 +985,12 @@ function g6Init() {
             g6File = await g6FileHandle.getFile()
             g6LoadFile(g6File)
         } catch (error) {
-            if (error && error.name == 'AbortError') return
+            // A refusal and a cancel arrive the same way, so say what to do
+            // rather than guessing which one it was.
+            if (error && error.name == 'AbortError') {
+                g6ExplainPickerLimits()
+                return
+            }
 
             // never leave the button looking dead, say what went wrong and let
             // the plain upload take over from here
@@ -972,6 +999,22 @@ function g6Init() {
             alert(`Could not open the file picker: ${error && error.message}\n\nFalling back to a normal file upload.`)
             g6UseUploadFallback()
         }
+    })
+}
+
+// A second way in, always present, because the file picker can refuse a folder
+// outright. Chromium keeps a blocklist of sensitive directories and AppData is
+// on it, which is exactly where Citra puts its saves by default: the picker
+// answers "this folder contains system files" and there is nothing the page can
+// do about it. A plain file input is not subject to that list, so it always
+// works, at the cost of the handle that auto sync and write back need.
+function g6AddUploadButton() {
+    if ($('#upload-save').length) return
+
+    $('#read-save').after(`<label for="save-upload-3ds" class="bs-btn" id="upload-save">Upload Save</label>`)
+    $('#upload-save').on('click', function () {
+        // cleared every time, or picking the same file twice fires no change
+        if ($('#save-upload-3ds').length) $('#save-upload-3ds')[0].value = null
     })
 }
 
