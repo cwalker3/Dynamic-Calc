@@ -48,18 +48,36 @@ def read_backup(key):
     return json.loads(raw[raw.index("{"):].rstrip().rstrip(";"))
 
 
-def read_move_ids():
-    """name -> id, from the generated gen 6 constants."""
+def move_name_order(data):
+    """The game's move names, in the gen 6 constants' order where the constants
+    know them and alphabetically after that.
+
+    Position in this list is the move's id on the page. mastersheet.js looks a
+    move up by where its name sits in the page's own name list and then shows
+    [data-move-id='<that position>'], so the two have to be the same number: an
+    id from anywhere else points the lookup at some other move."""
+    known = {}
     path = os.path.join(REPO, "js", "save_constants", "gen6.js")
-    if not os.path.exists(path):
-        return {}
-    with open(path, encoding="utf-8") as f:
-        src = f.read()
-    m = re.search(r"g6_moves = \[(.*?)\n\]", src, re.S)
-    if not m:
-        return {}
-    names = json.loads("[" + m.group(1).rstrip().rstrip(",") + "]")
-    return {n: i for i, n in enumerate(names)}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            src = f.read()
+        m = re.search(r"g6_moves = \[(.*?)\n\]", src, re.S)
+        if m:
+            names = json.loads("[" + m.group(1).rstrip().rstrip(",") + "]")
+            known = {n: i for i, n in enumerate(names)}
+
+    unknown = len(known)
+    return sorted(data["moves"], key=lambda n: (known.get(n, unknown), n))
+
+
+def species_name_order(data):
+    """The game's species names, in the export's own dex order where it numbers
+    them and alphabetically otherwise. Position is the id, for the reason
+    move_name_order gives, and an export that numbers nothing would otherwise
+    leave every panel answering to id 0 at once."""
+    poks = data["poks"]
+    unnumbered = len(poks)
+    return sorted(poks, key=lambda n: (poks[n].get("id", unnumbered), n))
 
 
 def read_authored_order(title):
@@ -107,8 +125,18 @@ def esc(value):
     return html.escape(str(value), quote=True)
 
 
-def has_moves(entry):
-    return any(m for m in (entry.get("moves") or []))
+def has_moves(team):
+    """deriveTrainerOrder's own test: any move on any of their Pokemon."""
+    return any(m for p in team for m in (p["entry"].get("moves") or []))
+
+
+def is_filler(team):
+    """An unused rom slot: a level 5 Zigzagoon with zeroed IVs and no move list
+    at all. Tested on both counts, because an export can also be missing the
+    moves for a trainer you really do fight: 76 of Run & Bun's are level 80
+    rematches with a species, an ability and an empty move list, and dropping
+    those for looking moveless took Wally off the page along with the filler."""
+    return all(p["entry"].get("moves") is None and p["level"] <= 5 for p in team)
 
 
 def group_trainers(data):
@@ -129,11 +157,10 @@ def group_trainers(data):
     for team in trainers.values():
         team.sort(key=lambda p: (p["sub_index"], p["level"]))
 
-    # Unused rom slots: every set moveless, level 5 Zigzagoon with zeroed IVs.
-    # deriveTrainerOrder sorts these past the real trainers so ids stay lined
-    # up, and there is nothing to show for them here.
-    return {name: team for name, team in trainers.items()
-            if any(has_moves(p["entry"]) for p in team)}
+    # every trainer, filler included: deriveTrainerOrder numbers those too, and
+    # the ids only line up if this counts the same ones. is_filler decides what
+    # actually reaches the page.
+    return dict(trainers)
 
 
 def render_mon(mon, data, move_ids):
@@ -294,7 +321,18 @@ def render_document(title, trainers, data, move_ids, splits):
         trainers.items(),
         key=lambda kv: (rank.get(kv[0], float("inf")),
                         max(p["level"] for p in kv[1]), kv[0]))
+
+    # and then, as it does, the moveless ones go past the rest before anything is
+    # numbered. Miss this step and every id past the first moveless trainer is
+    # off by one for the rest of the game: clicking Roxanne handed the
+    # calculator a Hiker.
+    real = [kv for kv in ordered if has_moves(kv[1])]
+    empty = [kv for kv in ordered if not has_moves(kv[1])]
+    ordered = real + empty
     tr_ids = {name: i for i, (name, _) in enumerate(ordered)}
+
+    # filler is numbered but not shown
+    ordered = [kv for kv in ordered if not is_filler(kv[1])]
 
     # bucket trainers by the level cap they fall under, so the page reads in
     # roughly the order you meet them
@@ -338,6 +376,11 @@ def render_species_panels(data, move_ids):
         dex_id = pok.get("id", 0)
         types = pok.get("types") or ["Normal"]
         abilities = pok.get("abilities") or []
+        if isinstance(abilities, dict):
+            # the exports disagree about this one: a plain list in some, the
+            # slot-keyed object the calc's own pokedex uses ("0", "1", "H") in
+            # others. Slot order is the sort order either way.
+            abilities = [abilities[k] for k in sorted(abilities)]
         bs = pok.get("bs") or {}
 
         type_html = "".join(
@@ -399,7 +442,11 @@ def render_move_panels(data, move_ids):
 
 def build(key, title, areas_path=None):
     data = read_backup(key)
-    move_ids = read_move_ids()
+    move_names = move_name_order(data)
+    move_ids = {name: i for i, name in enumerate(move_names)}
+    species_names = species_name_order(data)
+    for i, name in enumerate(species_names):
+        data["poks"][name]["id"] = i
     splits = read_splits(title)
     trainers = group_trainers(data)
     areas = read_areas(areas_path)
@@ -413,12 +460,9 @@ def build(key, title, areas_path=None):
                     for j in MASTERSHEET_JS)
     shell = shell.replace("</head>", head + "</head>", 1)
 
-    autofills = {
-        "true_pokemon_names": [n for n, _ in sorted(data["poks"].items(),
-                                                    key=lambda kv: kv[1].get("id", 0))],
-        "move_names": [n for n, _ in sorted(data["moves"].items(),
-                                            key=lambda kv: move_ids.get(kv[0], 0))],
-    }
+    # the lookup shows [data-species-id='<index into this>'], so these two lists
+    # are the id assignment above, written out in the same order
+    autofills = {"true_pokemon_names": species_names, "move_names": move_names}
 
     document_html, sections = render_document(title, trainers, data, move_ids, splits)
     if areas:
@@ -453,6 +497,17 @@ def build(key, title, areas_path=None):
 (function () {
     var open = true
 
+    // The calculator opens this in an iframe over the top of itself rather than
+    // navigating to it, and talks to it by message: the Calculator tab closes
+    // the overlay, and a trainer hands their lead over. Without this the tab
+    // would reveal the calculator inside the frame, a second one underneath the
+    // first, and there would be no way back out.
+    var embedded = window.parent !== window
+
+    function tellParent(msg) {
+        try { window.parent.postMessage(msg, '*') } catch (e) { }
+    }
+
     function showSheet(on) {
         open = on
         // .wrapper is the whole calculator, not the results header as its name
@@ -476,13 +531,23 @@ def build(key, title, areas_path=None):
     $(document).on('click', '.ms-tab', function (e) {
         e.preventDefault()
         var view = $(this).attr('data-view')
+        if (embedded && view === 'calculator') return tellParent({ dex: 'close' })
         showSheet(view === 'mastersheet')
         setUrlView(view)
         if (view === 'mastersheet') $('#content-container').scrollTop(0)
     })
 
-    // a trainer click loads their team on the right, so drop the overlay to it
+    // a trainer click loads their team on the right, so drop the overlay to it.
+    // Embedded, the calculator that wants them is the one behind the frame, and
+    // it takes the set name the same way its own set selector holds it.
     $(document).on('click', '.trainer-name', function () {
+        if (embedded) {
+            var id = parseInt($(this).parent().parent().attr('data-index'))
+            if (typeof customLeads != 'undefined' && customLeads[id]) {
+                return tellParent({ dex: 'set', set: customLeads[id].split('[')[0] })
+            }
+            return tellParent({ dex: 'close' })
+        }
         setTimeout(function () { showSheet(false); setUrlView('calculator') }, 0)
     })
 
@@ -494,7 +559,8 @@ def build(key, title, areas_path=None):
     })
 
     var wanted = (location.search.match(/[?&]view=([^&]*)/) || [])[1]
-    showSheet(wanted !== 'calculator')
+    showSheet(embedded || wanted !== 'calculator')
+    if (embedded) tellParent({ dex: 'ready' })
 })()
 </script>
 """ % jump

@@ -59,6 +59,11 @@ splitData = {
 		"titles": ["Roxanne", "Brawly", "Wattson", "Flannery", "Norman", "Winona", "Tate&Liza", "Wallace", "Elite 4"],
 		"types": ["rock", "fighting", "electric", "fire", "normal", "flying", "psychic", "water"]
 	},
+	"Run & Bun": {
+		"lvls": [21, 25, 35, 42, 58, 70, 86, 93, 100],
+		"titles": ["Brawly", "Roxanne", "Wattson", "Norman", "Flannery", "Winona", "Tate&Liza", "Juan", "Elite 4"],
+		"types": ["fighting", "rock", "electric", "normal", "fire", "flying", "psychic", "water"]
+	},
 	"Sacred Gold/Storm Silver": {
 		"lvls": [15, 21, 22, 29, 35, 40, 44, 50, 55],
 		"titles": ["Falkner", "Bugsy", "Whitney", "Morty", "Chuck", "Jasmine", "Pryce", "Clair", "Elite 4"],

@@ -1499,7 +1499,8 @@ $(document).ready(function() {
         "Sterling Silver 1.14": "sterlingsilver",
         "Renegade Platinum": "renplat",
         "Vintage White": "vw",
-        "Rising Ruby/Sinking Saphire": "rrss"
+        "Rising Ruby/Sinking Saphire": "rrss",
+        "Run & Bun": "rnb"
     }
     encs = `https://api.npoint.io/c39f79b412a6f19f3c4f`
 
