@@ -42,7 +42,10 @@ function get_next_in() {
         var strongest_move_bp = 0
         var strongest_move = "None"
         var sub_index = trainer_poks[i].split(" (")[1].replace(")", "").split("[")[1].replace("]", "")
-        var types = pokedex[pok_name].types
+        // a set can be filed under a species the dex has no entry for: a hack's
+        // own forme, or a name the set data spells differently. Reading types
+        // straight off that threw and took the whole preview down with it.
+        var types = (pokedex[pok_name] || {}).types || []
 
 
 
